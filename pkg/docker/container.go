@@ -56,9 +56,9 @@ func (d *DockerContainer) run(ctx context.Context) error {
 	return nil
 }
 
-func (d *DockerContainer) Attach(ctx context.Context) (ContainerTerminal, error) {
+func (d *DockerContainer) Attach(ctx context.Context) (io.ReadWriteCloser, error) {
 	if d.containerId == "" {
-		return ContainerTerminal{}, fmt.Errorf("container is not running")
+		return nil, fmt.Errorf("container is not running")
 	}
 
 	attachment, err := d.cli.ContainerAttach(ctx, d.containerId, container.AttachOptions{
@@ -68,20 +68,25 @@ func (d *DockerContainer) Attach(ctx context.Context) (ContainerTerminal, error)
 		Stream: true,
 	})
 	if err != nil {
-		return ContainerTerminal{}, err
+		return nil, err
 	}
 
-	return ContainerTerminal{
-		IO: attachment.Conn,
-	}, nil
+	return attachment.Conn, nil
 }
 
-func (d *DockerContainer) WaitForExit(ctx context.Context) error {
+func (d *DockerContainer) WaitForExit(ctx context.Context, clean bool) error {
 	statusCh, errCh := d.cli.ContainerWait(ctx, d.containerId, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
 		return err
 	case <-statusCh:
+	}
+
+	if clean {
+		err := d.cli.ContainerRemove(ctx, d.containerId, container.RemoveOptions{Force: true})
+		if err != nil {
+			return fmt.Errorf("failed to remove container: %w", err)
+		}
 	}
 	return nil
 }

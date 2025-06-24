@@ -35,11 +35,11 @@ func main() {
 	}
 	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
 
-	go io.Copy(terminal.IO, os.Stdin)
-	go io.Copy(os.Stdout, terminal.IO)
-	go io.Copy(os.Stderr, terminal.IO)
+	go io.Copy(terminal, os.Stdin)
+	go io.Copy(os.Stdout, terminal)
+	go io.Copy(os.Stderr, terminal)
 
-	err = container.WaitForExit(ctx)
+	err = container.WaitForExit(ctx, true)
 	if err != nil {
 		log.Fatalf("error waiting for container exit: %v", err)
 	}
