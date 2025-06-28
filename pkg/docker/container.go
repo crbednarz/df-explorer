@@ -21,12 +21,17 @@ type ContainerTerminal struct {
 }
 
 func NewContainer(ctx context.Context, cli *client.Client, image string) (*DockerContainer, error) {
+	err := pullImage(ctx, cli, image)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pull image: %w", err)
+	}
+
 	container := &DockerContainer{
 		cli:         cli,
 		imageName:   image,
 		containerId: "",
 	}
-	err := container.run(ctx)
+	err = container.run(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run container: %w", err)
 	}
@@ -40,7 +45,7 @@ func (d *DockerContainer) run(ctx context.Context) error {
 	}
 	resp, err := d.cli.ContainerCreate(ctx, &container.Config{
 		Image:     d.imageName,
-		Cmd:       []string{"/bin/sh"},
+		Cmd:       []string{"/bin/bash"},
 		Tty:       true,
 		OpenStdin: true,
 	}, nil, nil, nil, "")
