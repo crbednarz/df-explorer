@@ -7,8 +7,6 @@ toolchain go1.23.9
 require (
 	github.com/charmbracelet/bubbletea v1.3.5
 	github.com/docker/docker v28.2.2+incompatible
-	github.com/hinshun/vt10x v0.0.0-20220301184237-5011da428d02
-	github.com/mattn/go-libvterm v0.0.0-20220218002314-74b0d3133396
 	github.com/moby/buildkit v0.22.0
 	github.com/pkg/errors v0.9.1
 	github.com/tonistiigi/fsutil v0.0.0-20250417144416-3f76f8130144
@@ -56,7 +54,6 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
-	github.com/mattn/go-pointer v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/locker v1.0.1 // indirect

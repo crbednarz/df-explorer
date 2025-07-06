@@ -1,0 +1,8 @@
+.libs
+libvterm/bin
+!libvterm/bin/*.c
+*.o
+*.lo
+*.a
+*.la
+/df-explorer

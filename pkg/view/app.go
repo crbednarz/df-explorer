@@ -2,6 +2,7 @@ package view
 
 import (
 	"io"
+	"log"
 	"os"
 	"time"
 
@@ -73,5 +74,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	return m.vterm.Contents()
+	contents, err := m.vterm.Contents()
+	if err != nil {
+		log.Fatalf("error during rendering: %v", err)
+	}
+	return contents
 }
