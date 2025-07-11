@@ -9,7 +9,7 @@ type VTermModel struct {
 }
 
 func NewVTerm() *VTermModel {
-	vt := vterm.New(20, 80)
+	vt := vterm.New(20, 90)
 	terminal := &VTermModel{
 		term: vt,
 	}

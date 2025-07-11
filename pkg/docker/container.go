@@ -7,10 +7,11 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 )
 
-type DockerContainer struct {
+type Container struct {
 	cli         *client.Client
 	imageName   string
 	containerId string
@@ -20,18 +21,51 @@ type ContainerTerminal struct {
 	IO io.ReadWriteCloser
 }
 
-func NewContainer(ctx context.Context, cli *client.Client, image string) (*DockerContainer, error) {
+type containerOptions struct {
+	mountOption
+}
+
+type ContainerOption interface {
+	apply(*containerOptions)
+}
+
+type mountOption struct {
+	mounts []mount.Mount
+}
+
+func (m *mountOption) apply(options *containerOptions) {
+	options.mounts = append(options.mounts, m.mounts...)
+}
+
+func WithMount(localPath string, containerPath string) ContainerOption {
+	return &mountOption{
+		mounts: []mount.Mount{
+			{
+				Type:   mount.TypeBind,
+				Source: localPath,
+				Target: containerPath,
+			},
+		},
+	}
+}
+
+func NewContainer(ctx context.Context, cli *client.Client, image string, optionFuncs ...ContainerOption) (*Container, error) {
+	options := containerOptions{}
+	for _, fn := range optionFuncs {
+		fn.apply(&options)
+	}
+
 	err := pullImage(ctx, cli, image)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pull image: %w", err)
 	}
 
-	container := &DockerContainer{
+	container := &Container{
 		cli:         cli,
 		imageName:   image,
 		containerId: "",
 	}
-	err = container.run(ctx)
+	err = container.run(ctx, &options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run container: %w", err)
 	}
@@ -39,16 +73,22 @@ func NewContainer(ctx context.Context, cli *client.Client, image string) (*Docke
 	return container, nil
 }
 
-func (d *DockerContainer) run(ctx context.Context) error {
+func (d *Container) run(ctx context.Context, options *containerOptions) error {
 	if d.containerId != "" {
 		return fmt.Errorf("container is already running with ID: %s", d.containerId)
 	}
-	resp, err := d.cli.ContainerCreate(ctx, &container.Config{
-		Image:     d.imageName,
-		Cmd:       []string{"/bin/bash"},
-		Tty:       true,
-		OpenStdin: true,
-	}, nil, nil, nil, "")
+	resp, err := d.cli.ContainerCreate(
+		ctx,
+		&container.Config{
+			Image:     d.imageName,
+			Cmd:       []string{"/bin/bash"},
+			Tty:       true,
+			OpenStdin: true,
+		},
+		&container.HostConfig{
+			Mounts: options.mounts,
+		},
+		nil, nil, "")
 	if err != nil {
 		return err
 	}
@@ -61,7 +101,7 @@ func (d *DockerContainer) run(ctx context.Context) error {
 	return nil
 }
 
-func (d *DockerContainer) Attach(ctx context.Context) (io.ReadWriteCloser, error) {
+func (d *Container) Attach(ctx context.Context) (io.ReadWriteCloser, error) {
 	if d.containerId == "" {
 		return nil, fmt.Errorf("container is not running")
 	}
@@ -79,7 +119,7 @@ func (d *DockerContainer) Attach(ctx context.Context) (io.ReadWriteCloser, error
 	return attachment.Conn, nil
 }
 
-func (d *DockerContainer) WaitForExit(ctx context.Context, clean bool) error {
+func (d *Container) WaitForExit(ctx context.Context, clean bool) error {
 	statusCh, errCh := d.cli.ContainerWait(ctx, d.containerId, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
@@ -96,7 +136,7 @@ func (d *DockerContainer) WaitForExit(ctx context.Context, clean bool) error {
 	return nil
 }
 
-func (d *DockerContainer) Close() error {
+func (d *Container) Close() error {
 	if d.containerId == "" {
 		return nil
 	}

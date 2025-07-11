@@ -10,7 +10,6 @@ VTermValue vterm_value_from_int(int int_value) {
 	return value;
 }
 
-
 int vterm_get_cells(const VTermScreen* screen, VTermRect area, VTermScreenCell* cells, size_t capacity) {
   size_t writeIndex = 0;
   for (size_t y = area.start_row; y < area.end_row; y++) {
@@ -74,6 +73,9 @@ func (vt *VTerm) setup() {
 
 	cursorBlink := C.vterm_value_from_int(1)
 	C.vterm_state_set_termprop(vt.state, C.VTERM_PROP_CURSORBLINK, &cursorBlink)
+
+	cursorVisible := C.vterm_value_from_int(1)
+	C.vterm_state_set_termprop(vt.state, C.VTERM_PROP_CURSORVISIBLE, &cursorVisible)
 }
 
 func (vt *VTerm) Write(data []byte) (int, error) {
@@ -93,6 +95,8 @@ func (vt *VTerm) SetSize(width int, height int) {
 	vt.mutex.Lock()
 	defer vt.mutex.Unlock()
 	C.vterm_set_size(vt.term, C.int(height), C.int(width))
+	C.vterm_screen_flush_damage(vt.screen)
+	C.vterm_screen_reset(vt.screen, C.int(1))
 }
 
 func (vt *VTerm) GetSize() (int, int) {
@@ -116,25 +120,27 @@ func (vt *VTerm) Contents() (string, error) {
 
 	width, height := vt.GetSize()
 	vt.ensureBufferCapacity(width, height)
+	var cursorPos C.VTermPos
+	C.vterm_state_get_cursorpos(vt.state, &cursorPos)
 
-	// int vterm_get_cells(const VTermScreen* screen, VTermRect area, VTermScreenCell* cells, size_t capacity) {
 	area := C.VTermRect{
 		start_row: 0,
 		start_col: 0,
 		end_row:   C.int(height),
 		end_col:   C.int(width),
 	}
-	_ = C.vterm_get_cells(vt.screen, area, unsafe.SliceData(vt.buffer), C.size_t(len(vt.buffer)))
+	C.vterm_get_cells(vt.screen, area, unsafe.SliceData(vt.buffer), C.size_t(len(vt.buffer)))
 	var output strings.Builder
 	var lastFg, lastBg [4]uint8
 	output.WriteString("\x1b[0m")
+	fmt.Fprintf(&output, "Cursor: %d, %d | Size: %d, %d", cursorPos.col, cursorPos.row, width, height)
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			cell := vt.buffer[y*width+x]
 			fg := cell.fg
 			bg := cell.bg
-			isCursorHere := false
+			isCursorHere := (x == int(cursorPos.col) && y == int(cursorPos.row))
 
 			if fg != lastFg || bg != lastBg {
 				fmt.Fprint(&output, "\x1b[")
@@ -160,8 +166,13 @@ func (vt *VTerm) Contents() (string, error) {
 				// Swap FG and BG for the cursor position
 				fmt.Fprint(&output, "\x1b[7m")
 			}
-			for _, r := range cell.chars {
-				output.WriteRune(rune(r))
+
+			for i := 0; i < int(cell.width); i++ {
+				if cell.chars[i] == 0 && isCursorHere {
+					output.WriteString(" ") // Write a space for empty cells at cursor
+				} else {
+					output.WriteRune(rune(cell.chars[i]))
+				}
 			}
 			if isCursorHere {
 				// Swap FG and BG back after the cursor position

@@ -1,42 +1,74 @@
 package view
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/crbednarz/df-explorer/pkg/explorer"
+	"golang.org/x/term"
 )
 
 type App struct {
-	program *tea.Program
-	model   *model
+	program     *tea.Program
+	model       *model
+	inputWriter io.Writer
 }
 
 type model struct {
-	vterm *VTermModel
+	vterm    *VTermModel
+	explorer *explorer.Explorer
 }
 
-func NewApp(containerAttachment io.ReadWriter) *App {
+func NewApp(e *explorer.Explorer) *App {
 	vterm := NewVTerm()
 	model := &model{
-		vterm: vterm,
+		vterm:    vterm,
+		explorer: e,
 	}
-	teaInputReader, teaInputWriter := io.Pipe()
-	go io.Copy(io.MultiWriter(containerAttachment, teaInputWriter), os.Stdin)
-	go io.Copy(vterm, containerAttachment)
 
+	teaInputReader, teaInputWriter := io.Pipe()
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithInput(teaInputReader))
 
 	return &App{
-		program: p,
-		model:   model,
+		program:     p,
+		model:       model,
+		inputWriter: teaInputWriter,
 	}
 }
 
-func (app *App) Run() error {
-	_, err := app.program.Run()
+func (app *App) Run(ctx context.Context) error {
+	container, err := app.model.explorer.SpawnContainer(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to spawn container: %w", err)
+	}
+
+	attachment, err := container.Attach(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to attach to container: %w", err)
+	}
+
+	// Switch stdin to raw mode so that individual inputs can be processed by the container.
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		return fmt.Errorf("unable to set terminal to raw mode: %w", err)
+	}
+	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
+	go io.Copy(io.MultiWriter(attachment, app.inputWriter), os.Stdin)
+	go io.Copy(app.model.vterm, attachment)
+
+	go func() {
+		err := app.model.explorer.Listen()
+		if err != nil {
+			log.Fatalf("error while listening to explorer commands: %v", err)
+		}
+	}()
+
+	_, err = app.program.Run()
 	return err
 }
 
@@ -64,7 +96,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case tea.WindowSizeMsg:
-		m.vterm.SetSize(msg.Width, msg.Height)
+		m.vterm.SetSize(msg.Width, msg.Height-2)
 		return m, nil
 	case frameMsg:
 		return m, animate()
@@ -78,5 +110,5 @@ func (m model) View() string {
 	if err != nil {
 		log.Fatalf("error during rendering: %v", err)
 	}
-	return contents
+	return fmt.Sprintf("%s\n%s", m.explorer.Status(), contents)
 }
