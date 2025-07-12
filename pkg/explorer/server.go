@@ -2,19 +2,19 @@ package explorer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
+	"path"
+
+	"github.com/nxadm/tail"
 
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/docker/docker/client"
 )
 
 type Server struct {
-	socketPath string
-	listener   net.Listener
+	sessionPath   string
+	remoteLogPath string
 }
 
 type commandJSON struct {
@@ -42,60 +42,62 @@ type Command struct {
 type CommandCallback func(Command) error
 
 func newServer() (*Server, error) {
-	socketPath := "/tmp/.df-explorer.sock"
-	os.Remove(socketPath)
-	listener, err := net.Listen("unix", socketPath)
+	userCacheDir, err := os.UserCacheDir()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get user cache directory: %w", err)
 	}
-	os.Chmod(socketPath, 0666)
+
+	cacheDir := path.Join(userCacheDir, "df-explorer")
+	err = os.MkdirAll(cacheDir, 0755)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create cache directory: %w", err)
+	}
+
+	sessionDir, err := os.MkdirTemp(cacheDir, "session-*")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create session directory: %w", err)
+	}
+	historyFile, err := os.Create(path.Join(sessionDir, "history.log"))
+	if err != nil {
+		return nil, fmt.Errorf("unable to create history log file: %w", err)
+	}
+	historyFile.Close()
+
 	server := &Server{
-		socketPath: socketPath,
-		listener:   listener,
+		sessionPath:   sessionDir,
+		remoteLogPath: "/tmp/df-explorer",
 	}
 	return server, nil
 }
 
 func (s *Server) SpawnContainer(ctx context.Context, cli *client.Client, image string) (*docker.Container, error) {
 	container, err := docker.NewContainer(ctx, cli, image, docker.WithMount(
-		s.socketPath,
-		s.socketPath,
+		s.sessionPath,
+		s.remoteLogPath,
 	))
 	return container, err
 }
 
+func (s *Server) historyLogPath() string {
+	return path.Join(s.sessionPath, "history.log")
+}
+
 func (s *Server) Listen(callback CommandCallback) error {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		var request commandJSON
-		err := json.NewDecoder(r.Body).Decode(&request)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		command := Command{
-			Command: request.Command,
-		}
-		err = callback(command)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-
-		response := responseJSON{
-			State:   "success",
-			Message: fmt.Sprintf("Command '%s' executed successfully", command.Command),
-		}
-		json.NewEncoder(w).Encode(response)
-	})
-
-	httpServer := http.Server{
-		Handler: mux,
+	file, err := tail.TailFile(s.historyLogPath(), tail.Config{Follow: true, ReOpen: true})
+	if err != nil {
+		return fmt.Errorf("unable to tail log file: %w", err)
 	}
-	return httpServer.Serve(s.listener)
+
+	for line := range file.Lines {
+		callback(Command{
+			Command: line.Text,
+			State:   CommandStateRunning,
+		})
+	}
+
+	return nil
 }
 
 func (s *Server) Close() error {
-	s.listener.Close()
-	return os.Remove(s.socketPath)
+	return os.Remove(s.sessionPath)
 }

@@ -41,9 +41,10 @@ func WithMount(localPath string, containerPath string) ContainerOption {
 	return &mountOption{
 		mounts: []mount.Mount{
 			{
-				Type:   mount.TypeBind,
-				Source: localPath,
-				Target: containerPath,
+				Type:     mount.TypeBind,
+				Source:   localPath,
+				Target:   containerPath,
+				ReadOnly: false,
 			},
 		},
 	}

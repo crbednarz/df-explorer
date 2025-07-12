@@ -46,6 +46,7 @@ func (app *App) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to spawn container: %w", err)
 	}
+	defer container.Close()
 
 	attachment, err := container.Attach(ctx)
 	if err != nil {
