@@ -133,7 +133,7 @@ func (vt *VTerm) Contents() (string, error) {
 	var output strings.Builder
 	var lastFg, lastBg [4]uint8
 	output.WriteString("\x1b[0m")
-	fmt.Fprintf(&output, "Cursor: %d, %d | Size: %d, %d", cursorPos.col, cursorPos.row, width, height)
+	fmt.Fprintf(&output, "Cursor: %d, %d | Size: %d, %d\n", cursorPos.col, cursorPos.row, width, height)
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
@@ -179,7 +179,11 @@ func (vt *VTerm) Contents() (string, error) {
 				fmt.Fprint(&output, "\x1b[27m")
 			}
 		}
-		output.WriteString("\x1b[0m\n")
+		if y == height-1 {
+			output.WriteString("\x1b[0m")
+		} else {
+			output.WriteString("\x1b[0m\n")
+		}
 	}
 	return output.String(), nil
 }

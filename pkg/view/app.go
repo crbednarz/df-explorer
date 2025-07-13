@@ -48,19 +48,14 @@ func (app *App) Run(ctx context.Context) error {
 	}
 	defer container.Close()
 
-	attachment, err := container.Attach(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to attach to container: %w", err)
-	}
-
 	// Switch stdin to raw mode so that individual inputs can be processed by the container.
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		return fmt.Errorf("unable to set terminal to raw mode: %w", err)
 	}
 	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
-	go io.Copy(io.MultiWriter(attachment, app.inputWriter), os.Stdin)
-	go io.Copy(app.model.vterm, attachment)
+	go io.Copy(io.MultiWriter(container.Attachment(), app.inputWriter), os.Stdin)
+	go io.Copy(app.model.vterm, container.Attachment())
 
 	go func() {
 		err := app.model.explorer.Listen()

@@ -2,6 +2,7 @@ package explorer
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 	"path"
@@ -13,12 +14,13 @@ import (
 )
 
 type Server struct {
-	sessionPath   string
-	remoteLogPath string
+	localSessionDir  string
+	remoteSessionDir string
 }
 
 type commandJSON struct {
 	Command string `json:"command"`
+	State   string `json:"state"`
 }
 
 type responseJSON struct {
@@ -40,6 +42,9 @@ type Command struct {
 }
 
 type CommandCallback func(Command) error
+
+//go:embed df-env.sh
+var envScript string
 
 func newServer() (*Server, error) {
 	userCacheDir, err := os.UserCacheDir()
@@ -63,23 +68,35 @@ func newServer() (*Server, error) {
 	}
 	historyFile.Close()
 
+	envScriptName := "df-env.sh"
+	err = os.WriteFile(path.Join(sessionDir, envScriptName), []byte(envScript), 0644)
+	if err != nil {
+		return nil, fmt.Errorf("unable to write profile script: %w", err)
+	}
+
 	server := &Server{
-		sessionPath:   sessionDir,
-		remoteLogPath: "/tmp/df-explorer",
+		localSessionDir:  sessionDir,
+		remoteSessionDir: "/tmp/df-explorer",
 	}
 	return server, nil
 }
 
 func (s *Server) SpawnContainer(ctx context.Context, cli *client.Client, image string) (*docker.Container, error) {
-	container, err := docker.NewContainer(ctx, cli, image, docker.WithMount(
-		s.sessionPath,
-		s.remoteLogPath,
-	))
+	container, err := docker.NewContainer(
+		ctx,
+		cli,
+		image,
+		docker.WithMount(
+			s.localSessionDir,
+			s.remoteSessionDir,
+		),
+	)
+	fmt.Fprintf(container.Attachment(), "source %s\nreset\n", path.Join(s.remoteSessionDir, "df-env.sh"))
 	return container, err
 }
 
 func (s *Server) historyLogPath() string {
-	return path.Join(s.sessionPath, "history.log")
+	return path.Join(s.localSessionDir, "history.log")
 }
 
 func (s *Server) Listen(callback CommandCallback) error {
@@ -99,5 +116,5 @@ func (s *Server) Listen(callback CommandCallback) error {
 }
 
 func (s *Server) Close() error {
-	return os.Remove(s.sessionPath)
+	return os.Remove(s.localSessionDir)
 }

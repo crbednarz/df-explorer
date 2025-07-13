@@ -15,6 +15,7 @@ type Container struct {
 	cli         *client.Client
 	imageName   string
 	containerId string
+	attachment  io.ReadWriteCloser
 }
 
 type ContainerTerminal struct {
@@ -71,17 +72,23 @@ func NewContainer(ctx context.Context, cli *client.Client, image string, optionF
 		return nil, fmt.Errorf("failed to run container: %w", err)
 	}
 
+	attachment, err := container.attach(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to attach to container: %w", err)
+	}
+	container.attachment = attachment
+
 	return container, nil
 }
 
-func (d *Container) run(ctx context.Context, options *containerOptions) error {
-	if d.containerId != "" {
-		return fmt.Errorf("container is already running with ID: %s", d.containerId)
+func (c *Container) run(ctx context.Context, options *containerOptions) error {
+	if c.containerId != "" {
+		return fmt.Errorf("container is already running with ID: %s", c.containerId)
 	}
-	resp, err := d.cli.ContainerCreate(
+	resp, err := c.cli.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image:     d.imageName,
+			Image:     c.imageName,
 			Cmd:       []string{"/bin/bash"},
 			Tty:       true,
 			OpenStdin: true,
@@ -93,21 +100,25 @@ func (d *Container) run(ctx context.Context, options *containerOptions) error {
 	if err != nil {
 		return err
 	}
-	d.containerId = resp.ID
+	c.containerId = resp.ID
 
-	err = d.cli.ContainerStart(ctx, d.containerId, container.StartOptions{})
+	err = c.cli.ContainerStart(ctx, c.containerId, container.StartOptions{})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (d *Container) Attach(ctx context.Context) (io.ReadWriteCloser, error) {
-	if d.containerId == "" {
+func (c *Container) Attachment() io.ReadWriter {
+	return c.attachment
+}
+
+func (c *Container) attach(ctx context.Context) (io.ReadWriteCloser, error) {
+	if c.containerId == "" {
 		return nil, fmt.Errorf("container is not running")
 	}
 
-	attachment, err := d.cli.ContainerAttach(ctx, d.containerId, container.AttachOptions{
+	attachment, err := c.cli.ContainerAttach(ctx, c.containerId, container.AttachOptions{
 		Stderr: true,
 		Stdout: true,
 		Stdin:  true,
@@ -120,8 +131,8 @@ func (d *Container) Attach(ctx context.Context) (io.ReadWriteCloser, error) {
 	return attachment.Conn, nil
 }
 
-func (d *Container) WaitForExit(ctx context.Context, clean bool) error {
-	statusCh, errCh := d.cli.ContainerWait(ctx, d.containerId, container.WaitConditionNotRunning)
+func (c *Container) WaitForExit(ctx context.Context, clean bool) error {
+	statusCh, errCh := c.cli.ContainerWait(ctx, c.containerId, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
 		return err
@@ -129,7 +140,7 @@ func (d *Container) WaitForExit(ctx context.Context, clean bool) error {
 	}
 
 	if clean {
-		err := d.cli.ContainerRemove(ctx, d.containerId, container.RemoveOptions{Force: true})
+		err := c.cli.ContainerRemove(ctx, c.containerId, container.RemoveOptions{Force: true})
 		if err != nil {
 			return fmt.Errorf("failed to remove container: %w", err)
 		}
@@ -137,11 +148,14 @@ func (d *Container) WaitForExit(ctx context.Context, clean bool) error {
 	return nil
 }
 
-func (d *Container) Close() error {
-	if d.containerId == "" {
+func (c *Container) Close() error {
+	if c.containerId == "" {
 		return nil
 	}
-	return d.cli.ContainerRemove(context.TODO(), d.containerId, container.RemoveOptions{Force: true})
+	if c.attachment != nil {
+		c.attachment.Close()
+	}
+	return c.cli.ContainerRemove(context.TODO(), c.containerId, container.RemoveOptions{Force: true})
 }
 
 func pullImage(ctx context.Context, cli *client.Client, imageName string) error {
