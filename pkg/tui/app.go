@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
@@ -21,15 +22,18 @@ type App struct {
 }
 
 type model struct {
-	vterm    *VTermModel
-	explorer *explorer.Explorer
+	vterm           *VTermPanel
+	history         *HistoryPanel
+	explorer        *explorer.Explorer
+	historyViewport viewport.Model
 }
 
 func NewApp(e *explorer.Explorer) *App {
 	vterm := NewVTerm()
 	model := &model{
-		vterm:    vterm,
-		explorer: e,
+		vterm:           vterm,
+		explorer:        e,
+		historyViewport: viewport.New(80, 40),
 	}
 
 	teaInputReader, teaInputWriter := io.Pipe()
@@ -59,9 +63,9 @@ func (app *App) Run(ctx context.Context) error {
 	go io.Copy(app.model.vterm, container.Attachment())
 
 	go func() {
-		err := app.model.explorer.Listen()
+		err := app.model.explorer.Run()
 		if err != nil {
-			log.Fatalf("error while listening to explorer commands: %v", err)
+			log.Fatalf("error while running explorer: %v", err)
 		}
 	}()
 
@@ -82,7 +86,7 @@ func animate() tea.Cmd {
 }
 
 func (m model) Init() tea.Cmd {
-	return animate()
+	return tea.Batch(m.historyViewport.Init(), animate())
 }
 
 func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -91,10 +95,18 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "esc", "ctrl+c":
 			return m, tea.Quit
+		default:
+			var cmd tea.Cmd
+			m.historyViewport, cmd = m.historyViewport.Update(msg)
+			return m, cmd
 		}
 	case tea.WindowSizeMsg:
-		m.vterm.SetSize(msg.Width, msg.Height-2)
-		return m, nil
+		m.vterm.SetSize(msg.Width, 10)
+		m.historyViewport.Width = msg.Width
+		m.historyViewport.Height = msg.Height - m.vterm.Height()
+		var cmd tea.Cmd
+		m.historyViewport, cmd = m.historyViewport.Update(msg)
+		return m, cmd
 	case frameMsg:
 		return m, animate()
 	}
@@ -103,9 +115,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	contents, err := m.vterm.Contents()
-	if err != nil {
-		log.Fatalf("error during rendering: %v", err)
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, m.explorer.Status(), contents)
+	contents := m.vterm.View()
+	m.historyViewport.SetContent(m.history.View())
+	return lipgloss.JoinVertical(lipgloss.Left, m.historyViewport.View(), contents)
 }
