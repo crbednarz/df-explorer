@@ -1,4 +1,4 @@
-package view
+package tui
 
 import (
 	vterm "github.com/crbednarz/df-explorer/pkg/vterm"

@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/crbednarz/df-explorer/pkg/explorer"
-	"github.com/crbednarz/df-explorer/pkg/view"
+	"github.com/crbednarz/df-explorer/pkg/tui"
 	"github.com/docker/docker/client"
 )
 
@@ -23,7 +23,7 @@ func main() {
 	}
 	defer explorer.Close()
 
-	app := view.NewApp(explorer)
+	app := tui.NewApp(explorer)
 	defer app.Close()
 
 	err = app.Run(ctx)

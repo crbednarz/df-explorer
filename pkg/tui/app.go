@@ -1,4 +1,4 @@
-package view
+package tui
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"golang.org/x/term"
 )
@@ -75,7 +76,7 @@ func (app *App) Close() error {
 type frameMsg struct{}
 
 func animate() tea.Cmd {
-	return tea.Tick(time.Second/30.0, func(_ time.Time) tea.Msg {
+	return tea.Tick(time.Second/60.0, func(_ time.Time) tea.Msg {
 		return frameMsg{}
 	})
 }
@@ -88,7 +89,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc", "ctrl+c":
+		case "esc", "ctrl+c":
 			return m, tea.Quit
 		}
 	case tea.WindowSizeMsg:
@@ -106,5 +107,5 @@ func (m model) View() string {
 	if err != nil {
 		log.Fatalf("error during rendering: %v", err)
 	}
-	return fmt.Sprintf("%s\n%s", m.explorer.Status(), contents)
+	return lipgloss.JoinVertical(lipgloss.Left, m.explorer.Status(), contents)
 }
