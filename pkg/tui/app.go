@@ -26,14 +26,17 @@ type model struct {
 	history         *HistoryPanel
 	explorer        *explorer.Explorer
 	historyViewport viewport.Model
+	commandChannel  chan explorer.Command
 }
 
 func NewApp(e *explorer.Explorer) *App {
 	vterm := NewVTerm()
 	model := &model{
 		vterm:           vterm,
+		history:         newHistoryPanel(),
 		explorer:        e,
 		historyViewport: viewport.New(80, 40),
+		commandChannel:  make(chan explorer.Command, 100),
 	}
 
 	teaInputReader, teaInputWriter := io.Pipe()
@@ -63,7 +66,10 @@ func (app *App) Run(ctx context.Context) error {
 	go io.Copy(app.model.vterm, container.Attachment())
 
 	go func() {
-		err := app.model.explorer.Run()
+		err := app.model.explorer.Run(func(command explorer.Command) error {
+			app.model.commandChannel <- command
+			return nil
+		})
 		if err != nil {
 			log.Fatalf("error while running explorer: %v", err)
 		}
@@ -77,7 +83,12 @@ func (app *App) Close() error {
 	return app.model.vterm.Close()
 }
 
-type frameMsg struct{}
+type (
+	frameMsg   struct{}
+	commandMsg struct {
+		command explorer.Command
+	}
+)
 
 func animate() tea.Cmd {
 	return tea.Tick(time.Second/60.0, func(_ time.Time) tea.Msg {
@@ -85,8 +96,14 @@ func animate() tea.Cmd {
 	})
 }
 
+func waitForCommand(commandChannel chan explorer.Command) tea.Cmd {
+	return func() tea.Msg {
+		return commandMsg{command: <-commandChannel}
+	}
+}
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.historyViewport.Init(), animate())
+	return tea.Batch(m.historyViewport.Init(), animate(), waitForCommand(m.commandChannel))
 }
 
 func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -107,6 +124,10 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.historyViewport, cmd = m.historyViewport.Update(msg)
 		return m, cmd
+
+	case commandMsg:
+		m.history.Set(m.explorer.History())
+		return m, waitForCommand(m.commandChannel)
 	case frameMsg:
 		return m, animate()
 	}

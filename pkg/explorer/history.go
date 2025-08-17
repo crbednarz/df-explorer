@@ -1,4 +1,4 @@
-package history
+package explorer
 
 type History struct {
 	Entries []HistoryEntry
@@ -23,8 +23,10 @@ type HistoryEntry struct {
 	Command string
 }
 
-func New() *History {
-	return &History{}
+func newHistory() *History {
+	return &History{
+		Entries: make([]HistoryEntry, 0),
+	}
 }
 
 func (h *History) Add(raw string) {

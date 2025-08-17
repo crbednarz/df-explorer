@@ -5,15 +5,14 @@ import (
 	"fmt"
 
 	"github.com/crbednarz/df-explorer/pkg/docker"
-	"github.com/crbednarz/df-explorer/pkg/history"
 	"github.com/docker/docker/client"
 )
 
 type Explorer struct {
 	cli        *client.Client
 	server     *Server
+	history    *History
 	dockerfile string
-	history    *history.History
 }
 
 func New(ctx context.Context, cli *client.Client, dockerfile string) (*Explorer, error) {
@@ -25,10 +24,14 @@ func New(ctx context.Context, cli *client.Client, dockerfile string) (*Explorer,
 		cli:        cli,
 		server:     server,
 		dockerfile: dockerfile,
-		history:    history.New(),
+		history:    newHistory(),
 	}
 
 	return e, nil
+}
+
+func (e *Explorer) History() []HistoryEntry {
+	return e.history.Entries
 }
 
 func (e *Explorer) SpawnContainer(ctx context.Context) (*docker.Container, error) {
@@ -36,9 +39,10 @@ func (e *Explorer) SpawnContainer(ctx context.Context) (*docker.Container, error
 	return e.server.SpawnContainer(ctx, e.cli, "ubuntu:latest")
 }
 
-func (e *Explorer) Run() error {
-	return e.server.Listen(func(command Command) error {
-		e.history.Add(command.Command)
+func (e *Explorer) Run(callback CommandCallback) error {
+	return e.server.Listen(func(cmd Command) error {
+		e.history.Add(cmd.Command)
+		callback(cmd)
 		return nil
 	})
 }

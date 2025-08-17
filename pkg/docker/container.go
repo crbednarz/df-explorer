@@ -168,14 +168,3 @@ func pullImage(ctx context.Context, cli *client.Client, imageName string) error 
 
 	return nil
 }
-
-/*
-func waitForContainerExit(ctx context.Context, cli *client.Client, containerId string) error {
-	statusCh, errCh := cli.ContainerWait(ctx, containerId, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
-		return err
-	case <-statusCh:
-	}
-	return nil
-}*/

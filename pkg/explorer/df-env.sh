@@ -19,3 +19,6 @@ function DFPostCommand() {
   unset DF_RUNNING_COMMAND
 }
 PROMPT_COMMAND="DFPostCommand"
+
+alias RUN="DF_RUN=1"
+alias ENV="DF_ENV=1 export"
