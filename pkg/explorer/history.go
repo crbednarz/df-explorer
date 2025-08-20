@@ -23,12 +23,6 @@ type HistoryEntry struct {
 	Command string
 }
 
-func newHistory() *History {
-	return &History{
-		Entries: make([]HistoryEntry, 0),
-	}
-}
-
 func (h *History) Add(raw string) {
 	h.Entries = append(h.Entries, HistoryEntry{
 		Command: raw,

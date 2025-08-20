@@ -11,7 +11,7 @@ import (
 type Explorer struct {
 	cli        *client.Client
 	server     *Server
-	history    *History
+	history    History
 	dockerfile string
 }
 
@@ -24,7 +24,6 @@ func New(ctx context.Context, cli *client.Client, dockerfile string) (*Explorer,
 		cli:        cli,
 		server:     server,
 		dockerfile: dockerfile,
-		history:    newHistory(),
 	}
 
 	return e, nil
@@ -36,6 +35,15 @@ func (e *Explorer) History() []HistoryEntry {
 
 func (e *Explorer) SpawnContainer(ctx context.Context) (*docker.Container, error) {
 	// TODO: Use provided dockerfile instead of hardcoded image
+
+	builder, err := docker.NewBuilder(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create docker builder: %w", err)
+	}
+	err = builder.Build(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to build docker image: %w", err)
+	}
 	return e.server.SpawnContainer(ctx, e.cli, "ubuntu:latest")
 }
 

@@ -7,18 +7,23 @@ function DFPreCommand() {
   unset DF_AT_PROMPT
 
   DF_RUNNING_COMMAND="$BASH_COMMAND"
-  printf "{\"command\":\"%q\",\"status\":\"running\"}" "$DF_RUNNING_COMMAND" >>/tmp/df-explorer/history.log
+  printf '{"command":"%q","status":"running"}\n' "$DF_RUNNING_COMMAND" >>/tmp/df-explorer/history.log
 }
 trap "DFPreCommand" DEBUG
 
 function DFPostCommand() {
-  local return_code=$?
+  local rc=$?
   DF_AT_PROMPT=1
 
-  printf "{\"command\":\"%q\",\"status\":\"complete\",\"rc\":$return_code}" "$DF_RUNNING_COMMAND" >>/tmp/df-explorer/history.log
+  printf '{"command":"%q","status":"complete","rc":%d}\n' "$DF_RUNNING_COMMAND" $rc >>/tmp/df-explorer/history.log
   unset DF_RUNNING_COMMAND
 }
 PROMPT_COMMAND="DFPostCommand"
 
-alias RUN="DF_RUN=1"
-alias ENV="DF_ENV=1 export"
+function RUN() {
+  eval $@
+}
+
+function ENV() {
+  eval export $@
+}
