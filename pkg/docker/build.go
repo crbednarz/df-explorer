@@ -1,15 +1,20 @@
 package docker
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 
-	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/util/appdefaults"
+	dclient "github.com/docker/docker/client"
+	bclient "github.com/moby/buildkit/client"
+	_ "github.com/moby/buildkit/client/connhelper/dockercontainer"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/fsutil"
@@ -17,31 +22,49 @@ import (
 )
 
 type Builder struct {
-	client *client.Client
+	client *bclient.Client
+	daemon *Container
 }
 
-func NewBuilder(ctx context.Context) (*Builder, error) {
-	c, err := client.New(ctx, appdefaults.Address)
+func NewBuilder(ctx context.Context, dockerClient *dclient.Client) (*Builder, error) {
+	daemon, err := NewContainer(
+		ctx,
+		dockerClient,
+		"moby/buildkit:rootless",
+		WithName("df-buildkitd"),
+		WithSecurityOption("seccomp=unconfined"),
+		WithSecurityOption("apparmor=unconfined"),
+		WithPull(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create buildkit daemon container: %w", err)
+	}
+
+	c, err := bclient.New(ctx, "docker-container://df-buildkitd")
 	if err != nil {
 		return nil, err
 	}
 
 	return &Builder{
 		client: c,
+		daemon: daemon,
 	}, nil
 }
 
-func (b *Builder) Commit(ctx context.Context, command string) error {
+func (b *Builder) Build(ctx context.Context, path string) (string, error) {
 	pipeR, pipeW := io.Pipe()
-	solveOpt, err := newSolveOpt(pipeW)
+	solveOpt, err := newSolveOpt(pipeW, path)
+	var imageID string
 	if err != nil {
-		return err
+		return "", err
 	}
-
 	eg, ctx := errgroup.WithContext(ctx)
-	ch := make(chan *client.SolveStatus)
+	ch := make(chan *bclient.SolveStatus)
 	eg.Go(func() error {
 		_, err := b.client.Solve(ctx, nil, *solveOpt, ch)
+		if err != nil {
+			pipeW.CloseWithError(err)
+		}
 		return err
 	})
 	eg.Go(func() error {
@@ -52,25 +75,24 @@ func (b *Builder) Commit(ctx context.Context, command string) error {
 			// fallback to using plain mode on stdout (in contrast to stderr).
 			d, _ = progressui.NewDisplay(os.Stdout, progressui.PlainMode)
 		}
-		// not using shared context to not disrupt display but let is finish reporting errors
-		_, err = d.UpdateFrom(context.TODO(), ch)
+		_, err = d.UpdateFrom(ctx, ch)
 		return err
 	})
 	eg.Go(func() error {
-		if err := loadDockerTar(pipeR); err != nil {
+		imageID, err = loadDockerTar(pipeR)
+		if err != nil {
 			return err
 		}
 		return pipeR.Close()
 	})
 	if err := eg.Wait(); err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return imageID, nil
 }
 
-func newSolveOpt(w io.WriteCloser) (*client.SolveOpt, error) {
-	buildCtx := "."
-	tag := "test-tag"
+func newSolveOpt(w io.WriteCloser, path string) (*bclient.SolveOpt, error) {
+	buildCtx := path
 	file := filepath.Join(buildCtx, "Dockerfile")
 
 	cxtLocalMount, err := fsutil.NewFS(buildCtx)
@@ -83,20 +105,10 @@ func newSolveOpt(w io.WriteCloser) (*client.SolveOpt, error) {
 		return nil, errors.New("invalid dockerfile local mount dir")
 	}
 
-	frontend := "dockerfile.v0" // TODO: use gateway
-	frontendAttrs := map[string]string{
-		"filename": filepath.Base(file),
-	}
-	// if target := clicontext.String("target"); target != "" {
-	// 	frontendAttrs["target"] = target
-	// }
-	return &client.SolveOpt{
-		Exports: []client.ExportEntry{
+	return &bclient.SolveOpt{
+		Exports: []bclient.ExportEntry{
 			{
 				Type: "docker", // TODO: use containerd image store when it is integrated to Docker
-				Attrs: map[string]string{
-					"name": tag,
-				},
 				Output: func(_ map[string]string) (io.WriteCloser, error) {
 					return w, nil
 				},
@@ -106,16 +118,35 @@ func newSolveOpt(w io.WriteCloser) (*client.SolveOpt, error) {
 			"context":    cxtLocalMount,
 			"dockerfile": dockerfileLocalMount,
 		},
-		Frontend:      frontend,
-		FrontendAttrs: frontendAttrs,
+		Frontend: "dockerfile.v0",
+		FrontendAttrs: map[string]string{
+			"filename": filepath.Base(file),
+		},
+		Ref: identity.NewID(),
 	}, nil
 }
 
-func loadDockerTar(r io.Reader) error {
+func (b *Builder) Close() error {
+	return b.daemon.Close()
+}
+
+func loadDockerTar(r io.Reader) (string, error) {
 	// no need to use moby/moby/client here
 	cmd := exec.Command("docker", "load")
+	var stdoutBuffer, stderrBuffer bytes.Buffer
 	cmd.Stdin = r
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	cmd.Stdout = &stdoutBuffer
+	cmd.Stderr = &stderrBuffer
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	re := regexp.MustCompile(`Loaded image ID:\s+(\S+)`)
+	m := re.FindStringSubmatch(stdoutBuffer.String())
+	if len(m) < 2 {
+		return "", fmt.Errorf("couldn't find loaded image ID")
+	}
+	imageID := m[1]
+	return imageID, nil
 }

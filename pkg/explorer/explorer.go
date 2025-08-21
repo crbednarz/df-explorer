@@ -34,17 +34,17 @@ func (e *Explorer) History() []HistoryEntry {
 }
 
 func (e *Explorer) SpawnContainer(ctx context.Context) (*docker.Container, error) {
-	// TODO: Use provided dockerfile instead of hardcoded image
-
-	builder, err := docker.NewBuilder(ctx)
+	builder, err := docker.NewBuilder(ctx, e.cli)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create docker builder: %w", err)
 	}
-	err = builder.Build(ctx)
+	defer builder.Close()
+	image, err := builder.Build(ctx, ".")
 	if err != nil {
 		return nil, fmt.Errorf("unable to build docker image: %w", err)
 	}
-	return e.server.SpawnContainer(ctx, e.cli, "ubuntu:latest")
+	fmt.Println("Image built successfully:", image)
+	return e.server.SpawnContainer(ctx, e.cli, image)
 }
 
 func (e *Explorer) Run(callback CommandCallback) error {

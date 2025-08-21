@@ -8,6 +8,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/docker/client"
 )
 
@@ -24,6 +25,12 @@ type ContainerTerminal struct {
 
 type containerOptions struct {
 	mountOption
+	attachOption
+	nameOption
+	entryPointOption
+	commandOption
+	pullOption
+	securityOptions []string
 }
 
 type ContainerOption interface {
@@ -51,15 +58,77 @@ func WithMount(localPath string, containerPath string) ContainerOption {
 	}
 }
 
+type attachOption bool
+
+func (a attachOption) apply(options *containerOptions) {
+	options.attachOption = a
+}
+
+func WithAttach(isAttached bool) ContainerOption {
+	return attachOption(isAttached)
+}
+
+type nameOption string
+
+func (n nameOption) apply(options *containerOptions) {
+	options.nameOption = n
+}
+
+func WithName(name string) ContainerOption {
+	return nameOption(name)
+}
+
+type securityOption string
+
+func (s securityOption) apply(options *containerOptions) {
+	options.securityOptions = append(options.securityOptions, string(s))
+}
+
+func WithSecurityOption(option string) ContainerOption {
+	return securityOption(option)
+}
+
+type entryPointOption []string
+
+func (e entryPointOption) apply(options *containerOptions) {
+	options.entryPointOption = e
+}
+
+func WithEntryPoint(entryPoint []string) ContainerOption {
+	return entryPointOption(entryPoint)
+}
+
+type commandOption []string
+
+func (c commandOption) apply(options *containerOptions) {
+	options.commandOption = c
+}
+
+func WithCommand(command []string) ContainerOption {
+	return commandOption(command)
+}
+
+type pullOption bool
+
+func (p pullOption) apply(options *containerOptions) {
+	options.pullOption = p
+}
+
+func WithPull() ContainerOption {
+	return pullOption(true)
+}
+
 func NewContainer(ctx context.Context, cli *client.Client, image string, optionFuncs ...ContainerOption) (*Container, error) {
 	options := containerOptions{}
 	for _, fn := range optionFuncs {
 		fn.apply(&options)
 	}
 
-	err := pullImage(ctx, cli, image)
-	if err != nil {
-		return nil, fmt.Errorf("failed to pull image: %w", err)
+	if options.pullOption {
+		err := pullImage(ctx, cli, image)
+		if err != nil {
+			return nil, fmt.Errorf("failed to pull image: %w", err)
+		}
 	}
 
 	container := &Container{
@@ -67,16 +136,18 @@ func NewContainer(ctx context.Context, cli *client.Client, image string, optionF
 		imageName:   image,
 		containerId: "",
 	}
-	err = container.run(ctx, &options)
+	err := container.run(ctx, &options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run container: %w", err)
 	}
 
-	attachment, err := container.attach(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to attach to container: %w", err)
+	if options.attachOption {
+		attachment, err := container.attach(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to attach to container: %w", err)
+		}
+		container.attachment = attachment
 	}
-	container.attachment = attachment
 
 	return container, nil
 }
@@ -88,15 +159,17 @@ func (c *Container) run(ctx context.Context, options *containerOptions) error {
 	resp, err := c.cli.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image:     c.imageName,
-			Cmd:       []string{"/bin/bash"},
-			Tty:       true,
-			OpenStdin: true,
+			Image:      c.imageName,
+			Cmd:        strslice.StrSlice(options.commandOption),
+			Entrypoint: strslice.StrSlice(options.entryPointOption),
+			Tty:        true,
+			OpenStdin:  true,
 		},
 		&container.HostConfig{
-			Mounts: options.mounts,
+			Mounts:      options.mounts,
+			SecurityOpt: options.securityOptions,
 		},
-		nil, nil, "")
+		nil, nil, string(options.nameOption))
 	if err != nil {
 		return err
 	}

@@ -90,6 +90,8 @@ func (s *Server) SpawnContainer(ctx context.Context, cli *client.Client, image s
 			s.localSessionDir,
 			s.remoteSessionDir,
 		),
+		docker.WithCommand([]string{"/bin/bash"}),
+		docker.WithAttach(true),
 	)
 	fmt.Fprintf(container.Attachment(), "source %s\nreset\n", path.Join(s.remoteSessionDir, "df-env.sh"))
 	return container, err
