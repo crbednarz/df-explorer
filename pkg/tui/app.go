@@ -26,7 +26,7 @@ type model struct {
 	history         *HistoryPanel
 	explorer        *explorer.Explorer
 	historyViewport viewport.Model
-	commandChannel  chan explorer.Command
+	commandChannel  chan commandMsg
 }
 
 func NewApp(e *explorer.Explorer) *App {
@@ -36,7 +36,7 @@ func NewApp(e *explorer.Explorer) *App {
 		history:         newHistoryPanel(),
 		explorer:        e,
 		historyViewport: viewport.New(80, 40),
-		commandChannel:  make(chan explorer.Command, 100),
+		commandChannel:  make(chan commandMsg, 100),
 	}
 
 	teaInputReader, teaInputWriter := io.Pipe()
@@ -66,8 +66,8 @@ func (app *App) Run(ctx context.Context) error {
 	go io.Copy(app.model.vterm, container.Attachment())
 
 	go func() {
-		err := app.model.explorer.Run(func(command explorer.Command) error {
-			app.model.commandChannel <- command
+		err := app.model.explorer.Run(func(event explorer.ServerEvent) error {
+			app.model.commandChannel <- commandMsg{}
 			return nil
 		})
 		if err != nil {
@@ -85,9 +85,7 @@ func (app *App) Close() error {
 
 type (
 	frameMsg   struct{}
-	commandMsg struct {
-		command explorer.Command
-	}
+	commandMsg struct{}
 )
 
 func animate() tea.Cmd {
@@ -96,9 +94,9 @@ func animate() tea.Cmd {
 	})
 }
 
-func waitForCommand(commandChannel chan explorer.Command) tea.Cmd {
+func waitForCommand(commandChannel chan commandMsg) tea.Cmd {
 	return func() tea.Msg {
-		return commandMsg{command: <-commandChannel}
+		return <-commandChannel
 	}
 }
 

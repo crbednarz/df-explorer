@@ -3,6 +3,7 @@ package explorer
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -18,30 +19,21 @@ type Server struct {
 	remoteSessionDir string
 }
 
-type commandJSON struct {
-	Command string `json:"command"`
-	State   string `json:"state"`
+type logEntryJSON struct {
+	Command    string `json:"command"`
+	Operation  string `json:"state"`
+	State      string `json:"operation"`
+	ReturnCode int    `json:"rc,omitempty"`
 }
 
-type responseJSON struct {
-	State   string `json:"state"`
-	Message string `json:"message"`
+type CommandCallback func(ServerEvent) error
+
+type ServerEvent struct {
+	Command    string
+	Operation  OperationType
+	State      CommandState
+	ReturnCode int
 }
-
-type CommandState int
-
-const (
-	CommandStateSuccess CommandState = iota
-	CommandStateError
-	CommandStateRunning
-)
-
-type Command struct {
-	Command string
-	State   CommandState
-}
-
-type CommandCallback func(Command) error
 
 //go:embed df-env.sh
 var envScript string
@@ -108,10 +100,12 @@ func (s *Server) Listen(callback CommandCallback) error {
 	}
 
 	for line := range file.Lines {
-		callback(Command{
-			Command: line.Text,
-			State:   CommandStateRunning,
-		})
+		var logEntry logEntryJSON
+		err := json.Unmarshal([]byte(line.Text), &logEntry)
+		if err != nil {
+			return fmt.Errorf("unable to parse log entry: %w", err)
+		}
+		callback(eventFromLogEntry(logEntry))
 	}
 
 	return nil
@@ -119,4 +113,23 @@ func (s *Server) Listen(callback CommandCallback) error {
 
 func (s *Server) Close() error {
 	return os.Remove(s.localSessionDir)
+}
+
+func eventFromLogEntry(entry logEntryJSON) ServerEvent {
+	var state CommandState
+	switch entry.State {
+	case "running":
+		state = CommandStateRunning
+	case "complete":
+		state = CommandStateSuccess
+	case "error":
+		state = CommandStateError
+	}
+
+	return ServerEvent{
+		Command:    entry.Command,
+		Operation:  OperationType(entry.Operation),
+		State:      state,
+		ReturnCode: entry.ReturnCode,
+	}
 }

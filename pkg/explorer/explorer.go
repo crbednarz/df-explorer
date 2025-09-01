@@ -48,9 +48,9 @@ func (e *Explorer) SpawnContainer(ctx context.Context) (*docker.Container, error
 }
 
 func (e *Explorer) Run(callback CommandCallback) error {
-	return e.server.Listen(func(cmd Command) error {
-		e.history.Add(cmd.Command)
-		callback(cmd)
+	return e.server.Listen(func(event ServerEvent) error {
+		e.history.Add(event.Command)
+		callback(event)
 		return nil
 	})
 }
