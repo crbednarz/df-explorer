@@ -12,18 +12,31 @@ type Explorer struct {
 	cli        *client.Client
 	server     *Server
 	history    History
-	dockerfile string
+	dockerfile *docker.Dockerfile
+	builder    *docker.Builder
 }
 
-func New(ctx context.Context, cli *client.Client, dockerfile string) (*Explorer, error) {
+func New(ctx context.Context, cli *client.Client) (*Explorer, error) {
 	server, err := newServer()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create server: %w", err)
+	}
+
+	builder, err := docker.NewBuilder(ctx, cli)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create docker builder: %w", err)
+	}
+
+	// TODO: Load dockerfile path from arg
+	dockerfile, err := docker.NewDockerfile(".", "Dockerfile")
+	if err != nil {
+		return nil, fmt.Errorf("unable to construct dockerfile: %w", err)
 	}
 	e := &Explorer{
 		cli:        cli,
 		server:     server,
 		dockerfile: dockerfile,
+		builder:    builder,
 	}
 
 	return e, nil
@@ -34,12 +47,7 @@ func (e *Explorer) History() []HistoryEntry {
 }
 
 func (e *Explorer) SpawnContainer(ctx context.Context) (*docker.Container, error) {
-	builder, err := docker.NewBuilder(ctx, e.cli)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create docker builder: %w", err)
-	}
-	defer builder.Close()
-	image, err := builder.Build(ctx, ".")
+	image, err := e.dockerfile.Build(ctx, e.builder)
 	if err != nil {
 		return nil, fmt.Errorf("unable to build docker image: %w", err)
 	}
@@ -49,7 +57,10 @@ func (e *Explorer) SpawnContainer(ctx context.Context) (*docker.Container, error
 
 func (e *Explorer) Run(callback CommandCallback) error {
 	return e.server.Listen(func(event ServerEvent) error {
-		e.history.Add(event.Command)
+		e.history.Add(event)
+		if string(event.Operation) != "" {
+			e.dockerfile.Append(fmt.Sprintf("%s %s", event.Operation, event.Command))
+		}
 		callback(event)
 		return nil
 	})
@@ -71,5 +82,7 @@ func (e *Explorer) Snapshot() error {
 }
 
 func (e *Explorer) Close() error {
+	// TODO: Report multiple errors
+	e.builder.Close()
 	return e.server.Close()
 }

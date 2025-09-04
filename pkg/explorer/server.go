@@ -21,8 +21,8 @@ type Server struct {
 
 type logEntryJSON struct {
 	Command    string `json:"command"`
-	Operation  string `json:"state"`
-	State      string `json:"operation"`
+	Operation  string `json:"operation"`
+	Status     string `json:"status"`
 	ReturnCode int    `json:"rc,omitempty"`
 }
 
@@ -117,7 +117,7 @@ func (s *Server) Close() error {
 
 func eventFromLogEntry(entry logEntryJSON) ServerEvent {
 	var state CommandState
-	switch entry.State {
+	switch entry.Status {
 	case "running":
 		state = CommandStateRunning
 	case "complete":

@@ -16,7 +16,6 @@ import (
 	_ "github.com/moby/buildkit/client/connhelper/dockercontainer"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/progress/progressui"
-	"github.com/pkg/errors"
 	"github.com/tonistiigi/fsutil"
 	"golang.org/x/sync/errgroup"
 )
@@ -24,6 +23,11 @@ import (
 type Builder struct {
 	client *bclient.Client
 	daemon *Container
+}
+
+type BuildConfig struct {
+	BuildContext string
+	Dockerfile   string
 }
 
 func NewBuilder(ctx context.Context, dockerClient *dclient.Client) (*Builder, error) {
@@ -51,9 +55,9 @@ func NewBuilder(ctx context.Context, dockerClient *dclient.Client) (*Builder, er
 	}, nil
 }
 
-func (b *Builder) Build(ctx context.Context, path string) (string, error) {
+func (b *Builder) Build(ctx context.Context, config BuildConfig) (string, error) {
 	pipeR, pipeW := io.Pipe()
-	solveOpt, err := newSolveOpt(pipeW, path)
+	solveOpt, err := newSolveOpt(pipeW, config)
 	var imageID string
 	if err != nil {
 		return "", err
@@ -91,18 +95,15 @@ func (b *Builder) Build(ctx context.Context, path string) (string, error) {
 	return imageID, nil
 }
 
-func newSolveOpt(w io.WriteCloser, path string) (*bclient.SolveOpt, error) {
-	buildCtx := path
-	file := filepath.Join(buildCtx, "Dockerfile")
-
-	cxtLocalMount, err := fsutil.NewFS(buildCtx)
+func newSolveOpt(w io.WriteCloser, config BuildConfig) (*bclient.SolveOpt, error) {
+	cxtLocalMount, err := fsutil.NewFS(config.BuildContext)
 	if err != nil {
-		return nil, errors.New("invalid buildCtx local mount dir")
+		return nil, fmt.Errorf("invalid build context dir (%s): %w", config.BuildContext, err)
 	}
 
-	dockerfileLocalMount, err := fsutil.NewFS(filepath.Dir(file))
+	dockerfileLocalMount, err := fsutil.NewFS(filepath.Dir(config.Dockerfile))
 	if err != nil {
-		return nil, errors.New("invalid dockerfile local mount dir")
+		return nil, fmt.Errorf("invalid dockerfile dir (%s): %w", config.Dockerfile, err)
 	}
 
 	return &bclient.SolveOpt{
@@ -120,7 +121,7 @@ func newSolveOpt(w io.WriteCloser, path string) (*bclient.SolveOpt, error) {
 		},
 		Frontend: "dockerfile.v0",
 		FrontendAttrs: map[string]string{
-			"filename": filepath.Base(file),
+			"filename": filepath.Base(config.Dockerfile),
 		},
 		Ref: identity.NewID(),
 	}, nil

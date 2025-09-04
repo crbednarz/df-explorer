@@ -17,7 +17,7 @@ func main() {
 	}
 	defer cli.Close()
 
-	explorer, err := explorer.New(ctx, cli, "./Dockerfile")
+	explorer, err := explorer.New(ctx, cli)
 	if err != nil {
 		log.Fatalf("unable to create dockerfile explorer: %v", err)
 	}
