@@ -11,7 +11,9 @@ type HistoryEntry struct {
 }
 
 func (h *History) Add(event ServerEvent) {
-	h.Entries = append(h.Entries, HistoryEntry{
-		Command: fmt.Sprintf("%s: %s", string(event.Operation), event.Command),
-	})
+	if event.State == CommandStateSuccess {
+		h.Entries = append(h.Entries, HistoryEntry{
+			Command: fmt.Sprintf("%s: %s", string(event.Operation), event.Command),
+		})
+	}
 }

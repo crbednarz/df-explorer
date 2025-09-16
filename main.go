@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 
-	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui"
 	"github.com/docker/docker/client"
 )
@@ -17,13 +16,7 @@ func main() {
 	}
 	defer cli.Close()
 
-	explorer, err := explorer.New(ctx, cli)
-	if err != nil {
-		log.Fatalf("unable to create dockerfile explorer: %v", err)
-	}
-	defer explorer.Close()
-
-	app := tui.NewApp(explorer)
+	app := tui.NewApp(ctx, cli)
 	defer app.Close()
 
 	err = app.Run(ctx)

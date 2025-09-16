@@ -3,6 +3,7 @@ package explorer
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/docker/docker/client"
@@ -14,6 +15,7 @@ type Explorer struct {
 	history    History
 	dockerfile *docker.Dockerfile
 	builder    *docker.Builder
+	attachment dynamicIO
 }
 
 func New(ctx context.Context, cli *client.Client) (*Explorer, error) {
@@ -32,11 +34,13 @@ func New(ctx context.Context, cli *client.Client) (*Explorer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to construct dockerfile: %w", err)
 	}
+
 	e := &Explorer{
 		cli:        cli,
 		server:     server,
 		dockerfile: dockerfile,
 		builder:    builder,
+		attachment: dynamicIO{},
 	}
 
 	return e, nil
@@ -46,16 +50,24 @@ func (e *Explorer) History() []HistoryEntry {
 	return e.history.Entries
 }
 
-func (e *Explorer) SpawnContainer(ctx context.Context) (*docker.Container, error) {
-	image, err := e.dockerfile.Build(ctx, e.builder)
-	if err != nil {
-		return nil, fmt.Errorf("unable to build docker image: %w", err)
-	}
-	fmt.Println("Image built successfully:", image)
-	return e.server.SpawnContainer(ctx, e.cli, image)
+func (e *Explorer) Attachment() io.ReadWriter {
+	return &e.attachment
 }
 
-func (e *Explorer) Run(callback CommandCallback) error {
+func (e *Explorer) Run(ctx context.Context, callback CommandCallback) error {
+	image, err := e.dockerfile.Build(ctx, e.builder)
+	if err != nil {
+		return fmt.Errorf("unable to build docker image: %w", err)
+	}
+	fmt.Println("Image built successfully:", image)
+
+	container, err := e.server.SpawnContainer(ctx, e.cli, image)
+	if err != nil {
+		return fmt.Errorf("unable to spawn container: %w", err)
+	}
+	defer container.Close()
+	e.attachment.SetReaderWriter(container.Attachment(), container.Attachment())
+
 	return e.server.Listen(func(event ServerEvent) error {
 		e.history.Add(event)
 		if string(event.Operation) != "" {
@@ -66,23 +78,9 @@ func (e *Explorer) Run(callback CommandCallback) error {
 	})
 }
 
-func (e *Explorer) Rebuild(commands []Command) error {
-	// TODO: Impelement this
-	return fmt.Errorf("rebuild not implemented")
-}
-
-func (e *Explorer) Redeploy() error {
-	// TODO: Impelement this
-	return fmt.Errorf("redeploy not implemented")
-}
-
-func (e *Explorer) Snapshot() error {
-	// TODO: Impelement this
-	return fmt.Errorf("snapshot not implemented")
-}
-
 func (e *Explorer) Close() error {
-	// TODO: Report multiple errors
-	e.builder.Close()
+	if err := e.builder.Close(); err != nil {
+		return err
+	}
 	return e.server.Close()
 }
