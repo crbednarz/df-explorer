@@ -156,6 +156,23 @@ func (c *Container) run(ctx context.Context, options *containerOptions) error {
 	if c.containerId != "" {
 		return fmt.Errorf("container is already running with ID: %s", c.containerId)
 	}
+
+	if options.nameOption != "" {
+		containers, err := c.cli.ContainerList(ctx, container.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to list containers: %w", err)
+		}
+
+		for _, existingContainer := range containers {
+			containerName := existingContainer.Names[0]
+			if containerName == "/"+string(options.nameOption) {
+				err = c.cli.ContainerRemove(ctx, existingContainer.ID, container.RemoveOptions{Force: true})
+				if err != nil {
+					return fmt.Errorf("failed to remove existing container with name %s: %w", options.nameOption, err)
+				}
+			}
+		}
+	}
 	resp, err := c.cli.ContainerCreate(
 		ctx,
 		&container.Config{
