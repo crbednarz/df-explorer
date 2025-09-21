@@ -3,27 +3,27 @@ package tui
 import (
 	"fmt"
 
+	tea "github.com/charmbracelet/bubbletea"
 	vterm "github.com/crbednarz/df-explorer/pkg/vterm"
 )
 
-type VTermPanel struct {
+type vtermPanel struct {
 	term *vterm.VTerm
 }
 
-func NewVTerm() *VTermPanel {
-	vt := vterm.New(20, 90)
-	terminal := &VTermPanel{
-		term: vt,
-	}
-
-	return terminal
-}
-
-func (vt *VTermPanel) Write(data []byte) (int, error) {
+func (vt *vtermPanel) Write(data []byte) (int, error) {
 	return vt.term.Write(data)
 }
 
-func (vt *VTermPanel) View() string {
+func (vt *vtermPanel) Init() tea.Cmd {
+	return nil
+}
+
+func (vt *vtermPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return vt, nil
+}
+
+func (vt *vtermPanel) View() string {
 	contents, err := vt.term.Contents()
 	if err != nil {
 		return fmt.Sprintf("Error retrieving contents: %v", err)
@@ -31,20 +31,20 @@ func (vt *VTermPanel) View() string {
 	return contents
 }
 
-func (vt *VTermPanel) SetSize(width int, height int) {
+func (vt *vtermPanel) SetSize(width int, height int) {
 	vt.term.SetSize(width, height)
 }
 
-func (vt *VTermPanel) Close() error {
+func (vt *vtermPanel) Close() error {
 	return vt.term.Close()
 }
 
-func (vt *VTermPanel) Width() int {
+func (vt *vtermPanel) Width() int {
 	width, _ := vt.term.GetSize()
 	return width
 }
 
-func (vt *VTermPanel) Height() int {
+func (vt *vtermPanel) Height() int {
 	_, height := vt.term.GetSize()
 	return height
 }

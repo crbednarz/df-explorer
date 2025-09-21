@@ -68,7 +68,7 @@ func (e *Explorer) Run(ctx context.Context, callback CommandCallback) error {
 	defer container.Close()
 	e.attachment.SetReaderWriter(container.Attachment(), container.Attachment())
 
-	return e.server.Listen(func(event ServerEvent) error {
+	return e.server.Listen(ctx, func(event ServerEvent) error {
 		e.history.Add(event)
 		if string(event.Operation) != "" {
 			e.dockerfile.Append(fmt.Sprintf("%s %s", event.Operation, event.Command))

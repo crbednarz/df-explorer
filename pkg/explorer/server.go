@@ -93,22 +93,28 @@ func (s *Server) historyLogPath() string {
 	return path.Join(s.localSessionDir, "history.log")
 }
 
-func (s *Server) Listen(callback CommandCallback) error {
+func (s *Server) Listen(ctx context.Context, callback CommandCallback) error {
 	file, err := tail.TailFile(s.historyLogPath(), tail.Config{Follow: true, ReOpen: true})
 	if err != nil {
 		return fmt.Errorf("unable to tail log file: %w", err)
 	}
 
-	for line := range file.Lines {
-		var logEntry logEntryJSON
-		err := json.Unmarshal([]byte(line.Text), &logEntry)
-		if err != nil {
-			return fmt.Errorf("unable to parse log entry: %w", err)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case line, ok := <-file.Lines:
+			if !ok {
+				return nil
+			}
+			var logEntry logEntryJSON
+			err := json.Unmarshal([]byte(line.Text), &logEntry)
+			if err != nil {
+				return fmt.Errorf("unable to parse log entry: %w", err)
+			}
+			callback(eventFromLogEntry(logEntry))
 		}
-		callback(eventFromLogEntry(logEntry))
 	}
-
-	return nil
 }
 
 func (s *Server) Close() error {

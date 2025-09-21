@@ -1,0 +1,57 @@
+package tui
+
+import (
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+type windowModel struct {
+	main     tea.Model
+	terminal tea.Model
+}
+
+type (
+	frameMsg struct{}
+)
+
+func animate() tea.Cmd {
+	return tea.Tick(time.Second/60.0, func(_ time.Time) tea.Msg {
+		return frameMsg{}
+	})
+}
+
+func (m *windowModel) Init() tea.Cmd {
+	return tea.Batch(m.main.Init(), m.terminal.Init(), animate())
+}
+
+func (m *windowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var mainCmd tea.Cmd
+	var terminalCmd tea.Cmd
+
+	window, windowCmd := m.updateSelf(msg)
+	m.main, mainCmd = m.main.Update(msg)
+	m.terminal, terminalCmd = m.terminal.Update(msg)
+
+	return window, tea.Batch(windowCmd, mainCmd, terminalCmd)
+}
+
+func (m *windowModel) updateSelf(message tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := message.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c":
+			return m, tea.Quit
+		}
+	case frameMsg:
+		return m, animate()
+	}
+	return m, nil
+}
+
+func (m *windowModel) View() string {
+	vtermView := m.terminal.View()
+	mainView := m.main.View()
+	return lipgloss.JoinVertical(lipgloss.Left, mainView, vtermView)
+}
