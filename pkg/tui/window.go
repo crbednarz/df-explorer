@@ -5,11 +5,19 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/crbednarz/df-explorer/pkg/vterm"
 )
 
 type windowModel struct {
-	main     tea.Model
-	terminal tea.Model
+	main     *dockerfileView
+	terminal *vtermPanel
+}
+
+func newWindow(terminal *vterm.VTerm) *windowModel {
+	return &windowModel{
+		main:     newDockerfileView(),
+		terminal: newVTermPanel(terminal),
+	}
 }
 
 type (
@@ -44,6 +52,9 @@ func (m *windowModel) updateSelf(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		}
+	case tea.WindowSizeMsg:
+		m.terminal.SetSize(msg.Width, 10)
+		m.main.SetSize(msg.Width, msg.Height-10)
 	case frameMsg:
 		return m, animate()
 	}

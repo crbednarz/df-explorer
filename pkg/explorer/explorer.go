@@ -9,6 +9,8 @@ import (
 	"github.com/docker/docker/client"
 )
 
+type EventCallback func(event Event) error
+
 type Explorer struct {
 	cli        *client.Client
 	server     *Server
@@ -54,12 +56,18 @@ func (e *Explorer) Attachment() io.ReadWriter {
 	return &e.attachment
 }
 
-func (e *Explorer) Run(ctx context.Context, callback CommandCallback) error {
+func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
 	image, err := e.dockerfile.Build(ctx, e.builder)
 	if err != nil {
 		return fmt.Errorf("unable to build docker image: %w", err)
 	}
 	fmt.Println("Image built successfully:", image)
+	err = callback(DockerfileEvent{
+		Dockerfile: e.dockerfile,
+	})
+	if err != nil {
+		return err
+	}
 
 	container, err := e.server.SpawnContainer(ctx, e.cli, image)
 	if err != nil {
@@ -72,9 +80,19 @@ func (e *Explorer) Run(ctx context.Context, callback CommandCallback) error {
 		e.history.Add(event)
 		if string(event.Operation) != "" {
 			e.dockerfile.Append(fmt.Sprintf("%s %s", event.Operation, event.Command))
+			err := callback(DockerfileEvent{
+				Dockerfile: e.dockerfile,
+			})
+			if err != nil {
+				return err
+			}
 		}
-		callback(event)
-		return nil
+		return callback(CommandEvent{
+			Command:    event.Command,
+			Operation:  event.Operation,
+			State:      event.State,
+			ReturnCode: event.ReturnCode,
+		})
 	})
 }
 

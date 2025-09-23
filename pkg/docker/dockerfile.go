@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/imagemetaresolver"
@@ -40,6 +41,27 @@ const (
 type Dockerfile struct {
 	buildConfig BuildConfig
 	definition  *llb.Definition
+	stages      map[string]*Stage
+	source      *Source
+}
+
+type Stage struct {
+	Operations []Operation
+}
+
+type Operation struct {
+	SourceText      string
+	SourceLineStart int
+	SourceLineCount int
+}
+
+type Source struct {
+	Chunks []SourceChunk
+}
+
+type SourceChunk struct {
+	Text     string
+	Metadata *llb.OpMetadata
 }
 
 func NewDockerfile(buildContext string, dockerfile string) (*Dockerfile, error) {
@@ -103,5 +125,119 @@ func (df *Dockerfile) reload() error {
 		return err
 	}
 	df.definition = definition
+
+	err = df.rebuildSourceMap()
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (df *Dockerfile) rebuildSourceMap() error {
+	rawDockerfile, err := os.ReadFile(df.buildConfig.Dockerfile)
+	if err != nil {
+		return fmt.Errorf("unable to read dockerfile during source map rebuild: %w", err)
+	}
+
+	lines, err := parseDockerfileLines(df.definition, string(rawDockerfile))
+	if err != nil {
+		return fmt.Errorf("unable to parse dockerfile lines: %w", err)
+	}
+
+	var chunks []SourceChunk
+	lastMeta := lines[0].Metadata
+	chunkStart := 0
+
+	for i := 1; i < len(lines); i++ {
+		meta := lines[i].Metadata
+		if meta != lastMeta {
+			chunks = append(chunks, SourceChunk{
+				Text:     joinLines(lines[chunkStart:i]),
+				Metadata: lastMeta,
+			})
+			lastMeta = meta
+			chunkStart = i
+		}
+	}
+	chunks = append(chunks, SourceChunk{
+		Text:     joinLines(lines[chunkStart:]),
+		Metadata: lastMeta,
+	})
+
+	df.source = &Source{
+		Chunks: chunks,
+	}
+	return nil
+}
+
+func (df *Dockerfile) Source() *Source {
+	return df.source
+}
+
+type lineMetadata struct {
+	Text     string
+	Metadata *llb.OpMetadata
+}
+
+func parseDockerfileLines(definition *llb.Definition, rawDockerfile string) ([]lineMetadata, error) {
+	sourceLines := strings.Split(string(rawDockerfile), "\n")
+	lines := make([]lineMetadata, len(sourceLines))
+
+	for i, line := range sourceLines {
+		lines[i] = lineMetadata{
+			Text: line,
+		}
+	}
+
+	for hash, meta := range definition.Metadata {
+		hashStr := string(hash)
+		sourceLocations, ok := definition.Source.Locations[hashStr]
+		if !ok {
+			continue
+		}
+
+		for _, loc := range sourceLocations.Locations {
+			for _, locRange := range loc.Ranges {
+				for i := locRange.Start.Line; i <= locRange.End.Line; i++ {
+					lines[i-1].Metadata = &meta
+				}
+			}
+		}
+	}
+
+	writeIndex := 0
+	for i := 0; i < len(lines); i++ {
+		// TODO: Seems wasteful to allocate here
+		if strings.TrimSpace(lines[i].Text) == "" {
+			continue
+		}
+		if i != writeIndex {
+			lines[writeIndex] = lines[i]
+		}
+		writeIndex++
+	}
+	return lines[:writeIndex], nil
+}
+
+func joinLines(lines []lineMetadata) string {
+	if len(lines) == 0 {
+		return ""
+	} else if len(lines) == 1 {
+		return lines[0].Text
+	}
+
+	joinedSize := len(lines) - 1
+	for _, line := range lines {
+		joinedSize += len(line.Text)
+	}
+
+	var b strings.Builder
+	b.Grow(joinedSize)
+	b.WriteString(lines[0].Text)
+	for _, line := range lines[1:] {
+		b.WriteString("\n")
+		b.WriteString(line.Text)
+	}
+	return b.String()
 }

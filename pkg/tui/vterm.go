@@ -11,6 +11,12 @@ type vtermPanel struct {
 	term *vterm.VTerm
 }
 
+func newVTermPanel(vterm *vterm.VTerm) *vtermPanel {
+	return &vtermPanel{
+		term: vterm,
+	}
+}
+
 func (vt *vtermPanel) Write(data []byte) (int, error) {
 	return vt.term.Write(data)
 }
@@ -19,7 +25,7 @@ func (vt *vtermPanel) Init() tea.Cmd {
 	return nil
 }
 
-func (vt *vtermPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (vt *vtermPanel) Update(msg tea.Msg) (*vtermPanel, tea.Cmd) {
 	return vt, nil
 }
 
