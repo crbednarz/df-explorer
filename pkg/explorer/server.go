@@ -11,6 +11,7 @@ import (
 	"github.com/nxadm/tail"
 
 	"github.com/crbednarz/df-explorer/pkg/docker"
+	"github.com/crbednarz/df-explorer/pkg/util"
 	"github.com/docker/docker/client"
 )
 
@@ -39,15 +40,9 @@ type ServerEvent struct {
 var envScript string
 
 func newServer() (*Server, error) {
-	userCacheDir, err := os.UserCacheDir()
+	cacheDir, err := util.CacheDir()
 	if err != nil {
-		return nil, fmt.Errorf("unable to get user cache directory: %w", err)
-	}
-
-	cacheDir := path.Join(userCacheDir, "df-explorer")
-	err = os.MkdirAll(cacheDir, 0755)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create cache directory: %w", err)
+		return nil, err
 	}
 
 	sessionDir, err := os.MkdirTemp(cacheDir, "session-*")

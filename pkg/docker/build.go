@@ -8,9 +8,11 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 
+	"github.com/crbednarz/df-explorer/pkg/util"
 	dclient "github.com/docker/docker/client"
 	bclient "github.com/moby/buildkit/client"
 	_ "github.com/moby/buildkit/client/connhelper/dockercontainer"
@@ -31,6 +33,12 @@ type BuildConfig struct {
 }
 
 func NewBuilder(ctx context.Context, dockerClient *dclient.Client) (*Builder, error) {
+	cacheDir, err := util.CacheDir()
+	if err != nil {
+		return nil, err
+	}
+	builderCache := path.Join(cacheDir, "buildkitd")
+
 	daemon, err := NewContainer(
 		ctx,
 		dockerClient,
@@ -38,6 +46,7 @@ func NewBuilder(ctx context.Context, dockerClient *dclient.Client) (*Builder, er
 		WithName("df-buildkitd"),
 		WithSecurityOption("seccomp=unconfined"),
 		WithSecurityOption("apparmor=unconfined"),
+		WithMount(builderCache, "/var/lib/buildkit"),
 		WithPull(),
 	)
 	if err != nil {
