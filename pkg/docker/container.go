@@ -8,15 +8,15 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/docker/client"
 )
 
 type Container struct {
-	cli         *client.Client
-	imageName   string
-	containerId string
-	attachment  io.ReadWriteCloser
+	cli           *client.Client
+	imageName     string
+	containerId   string
+	attachment    io.ReadWriteCloser
+	removeOnClean bool
 }
 
 type ContainerTerminal struct {
@@ -24,107 +24,91 @@ type ContainerTerminal struct {
 }
 
 type containerOptions struct {
-	mountOption
-	attachOption
-	nameOption
-	entryPointOption
-	commandOption
-	pullOption
+	mounts          []mount.Mount
+	shouldAttach    bool
+	name            string
 	securityOptions []string
+	entryPoint      []string
+	command         []string
+	shouldPull      bool
+	shouldRemove    bool
+	shouldReuse     bool
 }
 
-type ContainerOption interface {
-	apply(*containerOptions)
-}
-
-type mountOption struct {
-	mounts []mount.Mount
-}
-
-func (m *mountOption) apply(options *containerOptions) {
-	options.mounts = append(options.mounts, m.mounts...)
-}
-
-func WithMount(localPath string, containerPath string) ContainerOption {
-	return &mountOption{
-		mounts: []mount.Mount{
-			{
-				Type:     mount.TypeBind,
-				Source:   localPath,
-				Target:   containerPath,
-				ReadOnly: false,
-			},
-		},
+func newContainerOptions() *containerOptions {
+	return &containerOptions{
+		shouldRemove: true,
 	}
 }
 
-type attachOption bool
+type ContainerOption func(*containerOptions)
 
-func (a attachOption) apply(options *containerOptions) {
-	options.attachOption = a
+func WithMount(localPath string, containerPath string) ContainerOption {
+	return func(options *containerOptions) {
+		options.mounts = append(options.mounts, mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   localPath,
+			Target:   containerPath,
+			ReadOnly: false,
+		})
+	}
 }
 
 func WithAttach(isAttached bool) ContainerOption {
-	return attachOption(isAttached)
-}
-
-type nameOption string
-
-func (n nameOption) apply(options *containerOptions) {
-	options.nameOption = n
+	return func(options *containerOptions) {
+		options.shouldAttach = isAttached
+	}
 }
 
 func WithName(name string) ContainerOption {
-	return nameOption(name)
-}
-
-type securityOption string
-
-func (s securityOption) apply(options *containerOptions) {
-	options.securityOptions = append(options.securityOptions, string(s))
+	return func(options *containerOptions) {
+		options.name = name
+	}
 }
 
 func WithSecurityOption(option string) ContainerOption {
-	return securityOption(option)
-}
-
-type entryPointOption []string
-
-func (e entryPointOption) apply(options *containerOptions) {
-	options.entryPointOption = e
+	return func(options *containerOptions) {
+		options.securityOptions = append(options.securityOptions, option)
+	}
 }
 
 func WithEntryPoint(entryPoint []string) ContainerOption {
-	return entryPointOption(entryPoint)
-}
-
-type commandOption []string
-
-func (c commandOption) apply(options *containerOptions) {
-	options.commandOption = c
+	return func(options *containerOptions) {
+		options.entryPoint = entryPoint
+	}
 }
 
 func WithCommand(command []string) ContainerOption {
-	return commandOption(command)
-}
-
-type pullOption bool
-
-func (p pullOption) apply(options *containerOptions) {
-	options.pullOption = p
+	return func(options *containerOptions) {
+		options.command = command
+	}
 }
 
 func WithPull() ContainerOption {
-	return pullOption(true)
+	return func(options *containerOptions) {
+		options.shouldPull = true
+	}
+}
+
+func WithRemoveOnClean(shouldRemove bool) ContainerOption {
+	return func(options *containerOptions) {
+		options.shouldRemove = shouldRemove
+	}
+}
+
+func WithReuse(shouldReuse bool) ContainerOption {
+	return func(options *containerOptions) {
+		options.shouldReuse = shouldReuse
+	}
 }
 
 func NewContainer(ctx context.Context, cli *client.Client, image string, optionFuncs ...ContainerOption) (*Container, error) {
-	options := containerOptions{}
+	options := newContainerOptions()
 	for _, fn := range optionFuncs {
-		fn.apply(&options)
+		fn(options)
 	}
 
-	if options.pullOption {
+	if options.shouldPull {
 		err := pullImage(ctx, cli, image)
 		if err != nil {
 			return nil, fmt.Errorf("failed to pull image: %w", err)
@@ -132,16 +116,17 @@ func NewContainer(ctx context.Context, cli *client.Client, image string, optionF
 	}
 
 	container := &Container{
-		cli:         cli,
-		imageName:   image,
-		containerId: "",
+		cli:           cli,
+		imageName:     image,
+		containerId:   "",
+		removeOnClean: options.shouldRemove,
 	}
-	err := container.run(ctx, &options)
+	err := container.run(ctx, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run container: %w", err)
 	}
 
-	if options.attachOption {
+	if options.shouldAttach {
 		attachment, err := container.attach(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("unable to attach to container: %w", err)
@@ -157,42 +142,43 @@ func (c *Container) run(ctx context.Context, options *containerOptions) error {
 		return fmt.Errorf("container is already running with ID: %s", c.containerId)
 	}
 
-	if options.nameOption != "" {
-		containers, err := c.cli.ContainerList(ctx, container.ListOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to list containers: %w", err)
-		}
-
-		for _, existingContainer := range containers {
-			containerName := existingContainer.Names[0]
-			if containerName == "/"+string(options.nameOption) {
-				err = c.cli.ContainerRemove(ctx, existingContainer.ID, container.RemoveOptions{Force: true})
+	if options.name != "" {
+		// We can ignore the error here, as we'll just create a new container if needed
+		existing, _ := c.findContainerIdByName(ctx, string(options.name))
+		if existing != "" {
+			if options.shouldReuse {
+				c.containerId = existing
+			} else {
+				err := c.cli.ContainerRemove(ctx, existing, container.RemoveOptions{Force: true})
 				if err != nil {
-					return fmt.Errorf("failed to remove existing container with name %s: %w", options.nameOption, err)
+					return fmt.Errorf("failed to remove existing container with name %s: %w", options.name, err)
 				}
 			}
 		}
 	}
-	resp, err := c.cli.ContainerCreate(
-		ctx,
-		&container.Config{
-			Image:      c.imageName,
-			Cmd:        strslice.StrSlice(options.commandOption),
-			Entrypoint: strslice.StrSlice(options.entryPointOption),
-			Tty:        true,
-			OpenStdin:  true,
-		},
-		&container.HostConfig{
-			Mounts:      options.mounts,
-			SecurityOpt: options.securityOptions,
-		},
-		nil, nil, string(options.nameOption))
-	if err != nil {
-		return err
-	}
-	c.containerId = resp.ID
 
-	err = c.cli.ContainerStart(ctx, c.containerId, container.StartOptions{})
+	if c.containerId == "" {
+		resp, err := c.cli.ContainerCreate(
+			ctx,
+			&container.Config{
+				Image:      c.imageName,
+				Cmd:        options.command,
+				Entrypoint: options.entryPoint,
+				Tty:        true,
+				OpenStdin:  true,
+			},
+			&container.HostConfig{
+				Mounts:      options.mounts,
+				SecurityOpt: options.securityOptions,
+			},
+			nil, nil, string(options.name))
+		if err != nil {
+			return err
+		}
+		c.containerId = resp.ID
+	}
+
+	err := c.cli.ContainerStart(ctx, c.containerId, container.StartOptions{})
 	if err != nil {
 		return err
 	}
@@ -201,6 +187,23 @@ func (c *Container) run(ctx context.Context, options *containerOptions) error {
 
 func (c *Container) Attachment() io.ReadWriter {
 	return c.attachment
+}
+
+func (c *Container) findContainerIdByName(ctx context.Context, name string) (string, error) {
+	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		return "", fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	searchName := "/" + name
+	for _, existingContainer := range containers {
+		for _, containerName := range existingContainer.Names {
+			if containerName == searchName {
+				return existingContainer.ID, nil
+			}
+		}
+	}
+	return "", nil
 }
 
 func (c *Container) attach(ctx context.Context) (io.ReadWriteCloser, error) {
@@ -244,6 +247,13 @@ func (c *Container) Close() error {
 	}
 	if c.attachment != nil {
 		c.attachment.Close()
+	}
+
+	// TODO: Investigate why graceful shutdown doesn't work
+	timeout := 0
+	err := c.cli.ContainerStop(context.TODO(), c.containerId, container.StopOptions{Timeout: &timeout})
+	if !c.removeOnClean {
+		return err
 	}
 	return c.cli.ContainerRemove(context.TODO(), c.containerId, container.RemoveOptions{Force: true})
 }

@@ -48,6 +48,8 @@ func NewBuilder(ctx context.Context, dockerClient *dclient.Client) (*Builder, er
 		WithSecurityOption("apparmor=unconfined"),
 		WithMount(builderCache, "/var/lib/buildkit"),
 		WithPull(),
+		WithRemoveOnClean(false),
+		WithReuse(true),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buildkit daemon container: %w", err)
