@@ -41,18 +41,7 @@ const (
 type Dockerfile struct {
 	buildConfig BuildConfig
 	definition  *llb.Definition
-	stages      map[string]*Stage
 	source      *Source
-}
-
-type Stage struct {
-	Operations []Operation
-}
-
-type Operation struct {
-	SourceText      string
-	SourceLineStart int
-	SourceLineCount int
 }
 
 type Source struct {
