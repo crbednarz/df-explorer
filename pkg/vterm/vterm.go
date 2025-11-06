@@ -3,14 +3,16 @@ package vterm
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../libvterm/include
 #cgo LDFLAGS: ${SRCDIR}/../../libvterm/.libs/libvterm.a
+#include <stdio.h>
+#include <stdlib.h>
 #include <vterm.h>
 
-VTermValue vterm_value_from_int(int int_value) {
+static VTermValue vterm_value_from_int(int int_value) {
   VTermValue value = { .number = int_value };
 	return value;
 }
 
-int vterm_get_cells(const VTermScreen* screen, VTermRect area, VTermScreenCell* cells, size_t capacity) {
+static int df_vterm_get_cells(const VTermScreen* screen, VTermRect area, VTermScreenCell* cells, size_t capacity) {
   size_t writeIndex = 0;
   for (size_t y = area.start_row; y < area.end_row; y++) {
 		for (size_t x = area.start_col; x < area.end_col; x++) {
@@ -25,11 +27,18 @@ int vterm_get_cells(const VTermScreen* screen, VTermRect area, VTermScreenCell* 
   }
 	return writeIndex;
 }
+
+typedef const char cchar_t;
+extern void vterm_output_callback(cchar_t *s, size_t len, void *user);
+static void df_vterm_output_set_callback(VTerm *vt, uintptr_t callback) {
+	vterm_output_set_callback(vt, vterm_output_callback, (void*)callback);
+}
 */
 import "C"
 
 import (
 	"fmt"
+	"runtime/cgo"
 	"strings"
 	"sync"
 	"unsafe"
@@ -38,6 +47,17 @@ import (
 // libvterm lacks documentation, so the following references were used:
 // - https://github.com/mattn/go-libvterm
 // - https://github.com/neovim/neovim/blob/master/src/nvim/terminal.c
+
+//export vterm_output_callback
+func vterm_output_callback(s *C.cchar_t, len C.size_t, user unsafe.Pointer) {
+	output := C.GoBytes(unsafe.Pointer(s), C.int(len))
+	callback := cgo.Handle(user).Value().(VTermWriteCallback)
+	callback(output)
+}
+
+type VTermWriteCallback func(data []byte)
+
+type VTermOption func(vt *VTerm)
 
 type VTerm struct {
 	term   *C.VTerm
@@ -91,12 +111,25 @@ func (vt *VTerm) Write(data []byte) (int, error) {
 	return int(C.vterm_input_write(vt.term, cData, cLength)), nil
 }
 
+func (vt *VTerm) WriteKey(key int) {
+	modifiers := 0
+	C.vterm_keyboard_unichar(vt.term, C.uint32_t(key), C.VTermModifier(modifiers))
+}
+
 func (vt *VTerm) SetSize(width int, height int) {
 	vt.mutex.Lock()
 	defer vt.mutex.Unlock()
 	C.vterm_set_size(vt.term, C.int(height), C.int(width))
 	C.vterm_screen_flush_damage(vt.screen)
 	C.vterm_screen_reset(vt.screen, C.int(1))
+}
+
+func (vt *VTerm) SetWriteCallback(callback VTermWriteCallback) {
+	vt.mutex.Lock()
+	defer vt.mutex.Unlock()
+
+	handle := cgo.NewHandle(callback)
+	C.df_vterm_output_set_callback(vt.term, C.uintptr_t(handle))
 }
 
 func (vt *VTerm) GetSize() (int, int) {
@@ -129,7 +162,7 @@ func (vt *VTerm) Contents() (string, error) {
 		end_row:   C.int(height),
 		end_col:   C.int(width),
 	}
-	C.vterm_get_cells(vt.screen, area, unsafe.SliceData(vt.buffer), C.size_t(len(vt.buffer)))
+	C.df_vterm_get_cells(vt.screen, area, unsafe.SliceData(vt.buffer), C.size_t(len(vt.buffer)))
 	var output strings.Builder
 	var lastFg, lastBg [4]uint8
 	output.WriteString("\x1b[0m")

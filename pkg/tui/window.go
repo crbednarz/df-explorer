@@ -1,27 +1,32 @@
 package tui
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/crbednarz/df-explorer/pkg/vterm"
+	"github.com/crbednarz/df-explorer/pkg/explorer"
 )
 
 type windowModel struct {
-	main     *dockerfileView
-	terminal *vtermPanel
+	main         *dockerfileView
+	terminal     *vtermPanel
+	vtermFocused bool
 }
 
-func newWindow(terminal *vterm.VTerm) *windowModel {
+func newWindow(explorer *explorer.Explorer) *windowModel {
 	return &windowModel{
 		main:     newDockerfileView(),
-		terminal: newVTermPanel(terminal),
+		terminal: newVTermPanel(explorer.Attachment()),
 	}
 }
 
 type (
 	frameMsg struct{}
+	focusMsg struct {
+		VTermFocused bool
+	}
 )
 
 func animate() tea.Cmd {
@@ -51,12 +56,19 @@ func (m *windowModel) updateSelf(message tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+j":
+			return m, func() tea.Msg { return focusMsg{VTermFocused: true} }
+		case "ctrl+k":
+			return m, func() tea.Msg { return focusMsg{VTermFocused: false} }
 		}
 	case tea.WindowSizeMsg:
 		m.terminal.SetSize(msg.Width, 10)
 		m.main.SetSize(msg.Width, msg.Height-10)
 	case frameMsg:
 		return m, animate()
+	case FatalErrorMsg:
+		fmt.Println("Fatal error:", msg.Err)
+		return m, tea.Quit
 	}
 	return m, nil
 }

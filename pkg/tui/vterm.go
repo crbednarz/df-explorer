@@ -2,18 +2,24 @@ package tui
 
 import (
 	"fmt"
+	"io"
 
 	tea "github.com/charmbracelet/bubbletea"
 	vterm "github.com/crbednarz/df-explorer/pkg/vterm"
+	"github.com/muesli/cancelreader"
 )
 
 type vtermPanel struct {
-	term *vterm.VTerm
+	term             *vterm.VTerm
+	attachment       io.ReadWriter
+	attachmentReader cancelreader.CancelReader
 }
 
-func newVTermPanel(vterm *vterm.VTerm) *vtermPanel {
+func newVTermPanel(attachment io.ReadWriter) *vtermPanel {
+	vterm := vterm.New(80, 20)
 	return &vtermPanel{
-		term: vterm,
+		term:       vterm,
+		attachment: attachment,
 	}
 }
 
@@ -22,10 +28,30 @@ func (vt *vtermPanel) Write(data []byte) (int, error) {
 }
 
 func (vt *vtermPanel) Init() tea.Cmd {
-	return nil
+	attachmentReader, err := cancelreader.NewReader(vt.attachment)
+	if err != nil {
+		return func() tea.Msg {
+			return FatalErrorMsg{Err: fmt.Errorf("error creating cancelable reader for container attachment: %w", err)}
+		}
+	}
+	vt.attachmentReader = attachmentReader
+	vt.term.SetWriteCallback(func(data []byte) {
+		vt.attachment.Write(data)
+	})
+	return func() tea.Msg {
+		_, err := io.Copy(vt.term, attachmentReader)
+		if err != nil {
+			return FatalErrorMsg{Err: fmt.Errorf("error reading from container attachment: %w", err)}
+		}
+		return nil
+	}
 }
 
-func (vt *vtermPanel) Update(msg tea.Msg) (*vtermPanel, tea.Cmd) {
+func (vt *vtermPanel) Update(message tea.Msg) (*vtermPanel, tea.Cmd) {
+	switch msg := message.(type) {
+	case tea.KeyMsg:
+		vt.handleKeyMsg(msg)
+	}
 	return vt, nil
 }
 
@@ -42,6 +68,7 @@ func (vt *vtermPanel) SetSize(width int, height int) {
 }
 
 func (vt *vtermPanel) Close() error {
+	vt.attachmentReader.Cancel()
 	return vt.term.Close()
 }
 
@@ -53,4 +80,13 @@ func (vt *vtermPanel) Width() int {
 func (vt *vtermPanel) Height() int {
 	_, height := vt.term.GetSize()
 	return height
+}
+
+func (vt *vtermPanel) handleKeyMsg(msg tea.KeyMsg) {
+	switch msg.Type {
+	case tea.KeyRunes:
+		for _, rune := range msg.Runes {
+			vt.term.WriteKey(int(rune))
+		}
+	}
 }

@@ -13,6 +13,7 @@ require (
 	github.com/muesli/cancelreader v0.2.2
 	github.com/nxadm/tail v1.4.11
 	github.com/tonistiigi/fsutil v0.0.0-20250417144416-3f76f8130144
+	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
 	golang.org/x/sync v0.14.0
 	golang.org/x/term v0.32.0
 )
