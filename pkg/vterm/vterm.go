@@ -111,9 +111,13 @@ func (vt *VTerm) Write(data []byte) (int, error) {
 	return int(C.vterm_input_write(vt.term, cData, cLength)), nil
 }
 
-func (vt *VTerm) WriteKey(key int) {
-	modifiers := 0
-	C.vterm_keyboard_unichar(vt.term, C.uint32_t(key), C.VTermModifier(modifiers))
+func (vt *VTerm) WriteKey(key Key) {
+	modifier := C.VTermModifier(key.Modifier)
+	if key.IsUnichar {
+		C.vterm_keyboard_unichar(vt.term, C.uint32_t(key.Code), modifier)
+	} else {
+		C.vterm_keyboard_key(vt.term, C.VTermKey(key.Code), modifier)
+	}
 }
 
 func (vt *VTerm) SetSize(width int, height int) {

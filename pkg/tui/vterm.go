@@ -50,7 +50,16 @@ func (vt *vtermPanel) Init() tea.Cmd {
 func (vt *vtermPanel) Update(message tea.Msg) (*vtermPanel, tea.Cmd) {
 	switch msg := message.(type) {
 	case tea.KeyMsg:
-		vt.handleKeyMsg(msg)
+
+		switch msg.Type {
+		case tea.KeyRunes:
+			vt.handleKeyMsg(msg)
+		default:
+			vtermKey, ok := keyTypeMap[msg.Type]
+			if ok {
+				vt.term.WriteKey(vtermKey)
+			}
+		}
 	}
 	return vt, nil
 }
@@ -65,6 +74,7 @@ func (vt *vtermPanel) View() string {
 
 func (vt *vtermPanel) SetSize(width int, height int) {
 	vt.term.SetSize(width, height)
+	vt.attachment.Write([]byte(fmt.Sprintf("\x1b[8;%d;%dt", height, width)))
 }
 
 func (vt *vtermPanel) Close() error {
@@ -86,7 +96,7 @@ func (vt *vtermPanel) handleKeyMsg(msg tea.KeyMsg) {
 	switch msg.Type {
 	case tea.KeyRunes:
 		for _, rune := range msg.Runes {
-			vt.term.WriteKey(int(rune))
+			vt.term.WriteKey(vterm.Key{IsUnichar: true, Code: uint(rune)})
 		}
 	}
 }

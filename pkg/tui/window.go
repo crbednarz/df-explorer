@@ -17,16 +17,14 @@ type windowModel struct {
 
 func newWindow(explorer *explorer.Explorer) *windowModel {
 	return &windowModel{
-		main:     newDockerfileView(),
-		terminal: newVTermPanel(explorer.Attachment()),
+		main:         newDockerfileView(),
+		terminal:     newVTermPanel(explorer.Attachment()),
+		vtermFocused: true,
 	}
 }
 
 type (
 	frameMsg struct{}
-	focusMsg struct {
-		VTermFocused bool
-	}
 )
 
 func animate() tea.Cmd {
@@ -39,13 +37,33 @@ func (m *windowModel) Init() tea.Cmd {
 	return tea.Batch(m.main.Init(), m.terminal.Init(), animate())
 }
 
-func (m *windowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *windowModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	var mainCmd tea.Cmd
 	var terminalCmd tea.Cmd
 
-	window, windowCmd := m.updateSelf(msg)
-	m.main, mainCmd = m.main.Update(msg)
-	m.terminal, terminalCmd = m.terminal.Update(msg)
+	switch msg := message.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+j":
+			m.vtermFocused = !m.vtermFocused
+			return m, nil
+		case "ctrl+k":
+			m.vtermFocused = !m.vtermFocused
+			return m, nil
+		default:
+			window, windowCmd := m.updateSelf(message)
+			if m.vtermFocused {
+				m.terminal, terminalCmd = m.terminal.Update(message)
+				return window, tea.Batch(windowCmd, terminalCmd)
+			} else {
+				m.main, mainCmd = m.main.Update(message)
+				return window, tea.Batch(windowCmd, mainCmd)
+			}
+		}
+	}
+	window, windowCmd := m.updateSelf(message)
+	m.main, mainCmd = m.main.Update(message)
+	m.terminal, terminalCmd = m.terminal.Update(message)
 
 	return window, tea.Batch(windowCmd, mainCmd, terminalCmd)
 }
@@ -56,10 +74,6 @@ func (m *windowModel) updateSelf(message tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
-		case "ctrl+j":
-			return m, func() tea.Msg { return focusMsg{VTermFocused: true} }
-		case "ctrl+k":
-			return m, func() tea.Msg { return focusMsg{VTermFocused: false} }
 		}
 	case tea.WindowSizeMsg:
 		m.terminal.SetSize(msg.Width, 10)
