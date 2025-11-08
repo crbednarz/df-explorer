@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/crbednarz/df-explorer/pkg/tui"
@@ -16,14 +17,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("unable to initialize docker client: %v", err)
 	}
-	defer cli.Close()
+	defer func() {
+		err := cli.Close()
+		if err != nil {
+			_ = fmt.Errorf("unable to close docker client: %v", err)
+		}
+	}()
 
 	log.Println("Creating TUI application...")
 	app, err := tui.NewApp(ctx, cli)
 	if err != nil {
 		log.Fatalf("unable to create UI: %v", err)
 	}
-	defer app.Close()
+	defer func() {
+		err := app.Close()
+		if err != nil {
+			_ = fmt.Errorf("unable to close UI: %v", err)
+		}
+	}()
 
 	log.Println("Running TUI application...")
 	err = app.Run(ctx)
