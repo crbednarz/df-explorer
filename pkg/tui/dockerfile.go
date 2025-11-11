@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -18,17 +17,31 @@ type dockerfileView struct {
 	dockerfile *docker.Dockerfile
 	blockList  list.Model
 	viewport   viewport.Model
+	chunkMap   map[string]*sourceChunkItem
 }
+
+type BuildStatus int
+
+const (
+	StatusPending BuildStatus = iota
+	StatusInProgress
+	StatusCompleted
+)
 
 type sourceChunkItem struct {
 	Text     string
 	Metadata *llb.OpMetadata
+	Vertex   string
+	Status   BuildStatus
 }
 
 var (
 	itemStyle         = lipgloss.NewStyle().PaddingLeft(1)
-	debugStyle        = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("241"))
-	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("170"))
+	selectedItemStyle = itemStyle.Foreground(lipgloss.Color("170"))
+	pendingStyle      = itemStyle.Foreground(lipgloss.Color("244"))
+	inProgressStyle   = itemStyle.Foreground(lipgloss.Color("33"))
+	completedStyle    = itemStyle.Foreground(lipgloss.Color("34"))
+	noStageStyle      = itemStyle.Foreground(lipgloss.Color("240"))
 )
 
 func newDockerfileView() *dockerfileView {
@@ -53,6 +66,12 @@ func (df *dockerfileView) Update(msg tea.Msg) (*dockerfileView, tea.Cmd) {
 	switch msg := msg.(type) {
 	case explorer.DockerfileEvent:
 		df.setDockerfile(msg.Dockerfile)
+	case explorer.BuildStartEvent:
+		for _, chunk := range df.chunkMap {
+			chunk.Status = StatusPending
+		}
+	case explorer.BuildProgressEvent:
+		df.handleProgress(msg)
 	}
 	var viewportCmd, listCmd tea.Cmd
 	df.viewport, viewportCmd = df.viewport.Update(msg)
@@ -73,16 +92,39 @@ func (df *dockerfileView) setDockerfile(dockerfile *docker.Dockerfile) {
 	chunks := dockerfile.Source().Chunks
 
 	sourceBlocks := make([]list.Item, len(chunks))
+	chunkMap := make(map[string]*sourceChunkItem)
 
 	for i, chunk := range chunks {
-		sourceBlocks[i] = &sourceChunkItem{
+		chunk := &sourceChunkItem{
 			Text:     chunk.Text,
 			Metadata: chunk.Metadata,
+			Vertex:   chunk.VertexHash,
+		}
+		sourceBlocks[i] = chunk
+		if chunk.Metadata != nil {
+			chunkMap[chunk.Vertex] = chunk
 		}
 	}
 
 	df.blockList.SetItems(sourceBlocks)
+	df.chunkMap = chunkMap
 	df.dockerfile = dockerfile
+}
+
+func (df *dockerfileView) handleProgress(event explorer.BuildProgressEvent) {
+	status := event.Status
+	for _, vertex := range status.Vertexes {
+		chunk, ok := df.chunkMap[string(vertex.Digest)]
+		if ok {
+			if vertex.Completed != nil {
+				chunk.Status = StatusCompleted
+			} else if vertex.Started != nil {
+				chunk.Status = StatusInProgress
+			} else {
+				chunk.Status = StatusPending
+			}
+		}
+	}
 }
 
 func (s sourceChunkItem) FilterValue() string { return s.Text }
@@ -102,18 +144,25 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 
 	str := block.Text
 
-	fn := func(s ...string) string {
-		return itemStyle.Render("  " + strings.Join(s, " "))
-	}
+	prefix := " "
+	style := itemStyle
+
 	if index == m.Index() {
-		fn = func(s ...string) string {
-			return selectedItemStyle.Render("> " + strings.Join(s, " "))
-		}
-	} else if block.Metadata != nil {
-		fn = func(s ...string) string {
-			return debugStyle.Render("# " + strings.Join(s, " "))
+		prefix = ">"
+		style = selectedItemStyle
+	} else if block.Metadata == nil {
+		style = noStageStyle
+	} else {
+		prefix = "#"
+		switch block.Status {
+		case StatusPending:
+			style = pendingStyle
+		case StatusInProgress:
+			style = inProgressStyle
+		case StatusCompleted:
+			style = completedStyle
 		}
 	}
 
-	fmt.Fprint(w, fn(str))
+	fmt.Fprint(w, style.Render(fmt.Sprintf("%s %s", prefix, str)))
 }

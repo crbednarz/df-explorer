@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
-	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
@@ -14,22 +12,47 @@ import (
 
 	"github.com/crbednarz/df-explorer/pkg/util"
 	dclient "github.com/docker/docker/client"
-	bclient "github.com/moby/buildkit/client"
+	buildkit "github.com/moby/buildkit/client"
 	_ "github.com/moby/buildkit/client/connhelper/dockercontainer"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/identity"
-	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/tonistiigi/fsutil"
 	"golang.org/x/sync/errgroup"
 )
 
 type Builder struct {
-	client *bclient.Client
+	client *buildkit.Client
 	daemon *Container
 }
 
+type BuildProgressCallback func()
+
 type BuildConfig struct {
-	BuildContext string
-	Dockerfile   string
+	BuildContext    string
+	Dockerfile      string
+	Definition      *llb.Definition
+	ProgressChannel chan *buildkit.SolveStatus
+}
+
+type BuildOption func(*BuildConfig)
+
+func WithDockerfile(dockerfile string, contextPath string) BuildOption {
+	return func(config *BuildConfig) {
+		config.Dockerfile = dockerfile
+		config.BuildContext = contextPath
+	}
+}
+
+func WithDefinition(def *llb.Definition) BuildOption {
+	return func(config *BuildConfig) {
+		config.Definition = def
+	}
+}
+
+func WithProgressChannel(channel chan *buildkit.SolveStatus) BuildOption {
+	return func(config *BuildConfig) {
+		config.ProgressChannel = channel
+	}
 }
 
 func NewBuilder(ctx context.Context, dockerClient *dclient.Client) (*Builder, error) {
@@ -55,7 +78,7 @@ func NewBuilder(ctx context.Context, dockerClient *dclient.Client) (*Builder, er
 		return nil, fmt.Errorf("failed to create buildkit daemon container: %w", err)
 	}
 
-	c, err := bclient.New(ctx, "docker-container://df-buildkitd")
+	c, err := buildkit.New(ctx, "docker-container://df-buildkitd")
 	if err != nil {
 		return nil, err
 	}
@@ -66,31 +89,23 @@ func NewBuilder(ctx context.Context, dockerClient *dclient.Client) (*Builder, er
 	}, nil
 }
 
-func (b *Builder) Build(ctx context.Context, config BuildConfig) (string, error) {
+func (b *Builder) Build(ctx context.Context, buildOptions ...BuildOption) (string, error) {
+	config := BuildConfig{}
+	for _, opt := range buildOptions {
+		opt(&config)
+	}
 	pipeR, pipeW := io.Pipe()
 	solveOpt, err := newSolveOpt(pipeW, config)
-	var imageID string
 	if err != nil {
 		return "", err
 	}
+	var imageID string
 	eg, ctx := errgroup.WithContext(ctx)
-	ch := make(chan *bclient.SolveStatus)
 	eg.Go(func() error {
-		_, err := b.client.Solve(ctx, nil, *solveOpt, ch)
+		_, err := b.client.Solve(ctx, config.Definition, *solveOpt, config.ProgressChannel)
 		if err != nil {
 			pipeW.CloseWithError(err)
 		}
-		return err
-	})
-	eg.Go(func() error {
-		d, err := progressui.NewDisplay(os.Stderr, progressui.TtyMode)
-		if err != nil {
-			log.Printf("failed to create progress display: %v", err)
-			// If an error occurs while attempting to create the tty display,
-			// fallback to using plain mode on stdout (in contrast to stderr).
-			d, _ = progressui.NewDisplay(os.Stdout, progressui.PlainMode)
-		}
-		_, err = d.UpdateFrom(ctx, ch)
 		return err
 	})
 	eg.Go(func() error {
@@ -106,7 +121,7 @@ func (b *Builder) Build(ctx context.Context, config BuildConfig) (string, error)
 	return imageID, nil
 }
 
-func newSolveOpt(w io.WriteCloser, config BuildConfig) (*bclient.SolveOpt, error) {
+func newSolveOpt(w io.WriteCloser, config BuildConfig) (*buildkit.SolveOpt, error) {
 	cxtLocalMount, err := fsutil.NewFS(config.BuildContext)
 	if err != nil {
 		return nil, fmt.Errorf("invalid build context dir (%s): %w", config.BuildContext, err)
@@ -117,8 +132,16 @@ func newSolveOpt(w io.WriteCloser, config BuildConfig) (*bclient.SolveOpt, error
 		return nil, fmt.Errorf("invalid dockerfile dir (%s): %w", config.Dockerfile, err)
 	}
 
-	return &bclient.SolveOpt{
-		Exports: []bclient.ExportEntry{
+	frontend := "dockerfile.v0"
+	frontendAttrs := map[string]string{
+		"filename": filepath.Base(config.Dockerfile),
+	}
+	if config.Definition != nil {
+		frontend = ""
+		frontendAttrs = map[string]string{}
+	}
+	return &buildkit.SolveOpt{
+		Exports: []buildkit.ExportEntry{
 			{
 				Type: "docker", // TODO: use containerd image store when it is integrated to Docker
 				Output: func(_ map[string]string) (io.WriteCloser, error) {
@@ -130,11 +153,9 @@ func newSolveOpt(w io.WriteCloser, config BuildConfig) (*bclient.SolveOpt, error
 			"context":    cxtLocalMount,
 			"dockerfile": dockerfileLocalMount,
 		},
-		Frontend: "dockerfile.v0",
-		FrontendAttrs: map[string]string{
-			"filename": filepath.Base(config.Dockerfile),
-		},
-		Ref: identity.NewID(),
+		Frontend:      frontend,
+		FrontendAttrs: frontendAttrs,
+		Ref:           identity.NewID(),
 	}, nil
 }
 
