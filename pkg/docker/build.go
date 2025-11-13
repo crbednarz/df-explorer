@@ -22,7 +22,7 @@ import (
 
 type Builder struct {
 	client *buildkit.Client
-	daemon *Container
+	daemon Container
 }
 
 type BuildProgressCallback func()

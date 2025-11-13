@@ -11,7 +11,13 @@ import (
 	"github.com/docker/docker/client"
 )
 
-type Container struct {
+type Container interface {
+	Attachment() io.ReadWriter
+	SetSize(width uint, height uint) error
+	Close() error
+}
+
+type DockerContainer struct {
 	cli           *client.Client
 	imageName     string
 	containerId   string
@@ -102,7 +108,7 @@ func WithReuse(shouldReuse bool) ContainerOption {
 	}
 }
 
-func NewContainer(ctx context.Context, cli *client.Client, image string, optionFuncs ...ContainerOption) (*Container, error) {
+func NewContainer(ctx context.Context, cli *client.Client, image string, optionFuncs ...ContainerOption) (*DockerContainer, error) {
 	options := newContainerOptions()
 	for _, fn := range optionFuncs {
 		fn(options)
@@ -115,7 +121,7 @@ func NewContainer(ctx context.Context, cli *client.Client, image string, optionF
 		}
 	}
 
-	container := &Container{
+	container := &DockerContainer{
 		cli:           cli,
 		imageName:     image,
 		containerId:   "",
@@ -137,7 +143,7 @@ func NewContainer(ctx context.Context, cli *client.Client, image string, optionF
 	return container, nil
 }
 
-func (c *Container) run(ctx context.Context, options *containerOptions) error {
+func (c *DockerContainer) run(ctx context.Context, options *containerOptions) error {
 	if c.containerId != "" {
 		return fmt.Errorf("container is already running with ID: %s", c.containerId)
 	}
@@ -185,11 +191,11 @@ func (c *Container) run(ctx context.Context, options *containerOptions) error {
 	return nil
 }
 
-func (c *Container) Attachment() io.ReadWriter {
+func (c *DockerContainer) Attachment() io.ReadWriter {
 	return c.attachment
 }
 
-func (c *Container) findContainerIdByName(ctx context.Context, name string) (string, error) {
+func (c *DockerContainer) findContainerIdByName(ctx context.Context, name string) (string, error) {
 	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return "", fmt.Errorf("failed to list containers: %w", err)
@@ -206,7 +212,7 @@ func (c *Container) findContainerIdByName(ctx context.Context, name string) (str
 	return "", nil
 }
 
-func (c *Container) attach(ctx context.Context) (io.ReadWriteCloser, error) {
+func (c *DockerContainer) attach(ctx context.Context) (io.ReadWriteCloser, error) {
 	if c.containerId == "" {
 		return nil, fmt.Errorf("container is not running")
 	}
@@ -224,24 +230,14 @@ func (c *Container) attach(ctx context.Context) (io.ReadWriteCloser, error) {
 	return attachment.Conn, nil
 }
 
-func (c *Container) WaitForExit(ctx context.Context, clean bool) error {
-	statusCh, errCh := c.cli.ContainerWait(ctx, c.containerId, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
-		return err
-	case <-statusCh:
-	}
-
-	if clean {
-		err := c.cli.ContainerRemove(ctx, c.containerId, container.RemoveOptions{Force: true})
-		if err != nil {
-			return fmt.Errorf("failed to remove container: %w", err)
-		}
-	}
-	return nil
+func (c *DockerContainer) SetSize(width uint, height uint) error {
+	return c.cli.ContainerResize(context.TODO(), c.containerId, container.ResizeOptions{
+		Height: height,
+		Width:  width,
+	})
 }
 
-func (c *Container) Close() error {
+func (c *DockerContainer) Close() error {
 	if c.containerId == "" {
 		return nil
 	}

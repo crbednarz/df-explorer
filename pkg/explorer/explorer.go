@@ -3,7 +3,6 @@ package explorer
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/docker/docker/client"
@@ -13,15 +12,22 @@ import (
 
 type EventCallback func(event Event) error
 
+type Status int
+
+const (
+	StatusIdle Status = iota
+	StatusBuilding
+)
+
 type Explorer struct {
 	cli           *client.Client
 	server        *Server
 	history       History
 	dockerfile    *docker.Dockerfile
 	builder       *docker.Builder
-	attachment    dynamicIO
-	container     *docker.Container
+	container     ContainerProxy
 	eventCallback EventCallback
+	status        Status
 }
 
 func New(ctx context.Context, cli *client.Client) (*Explorer, error) {
@@ -46,14 +52,10 @@ func New(ctx context.Context, cli *client.Client) (*Explorer, error) {
 		server:     server,
 		dockerfile: dockerfile,
 		builder:    builder,
-		attachment: dynamicIO{},
+		status:     StatusIdle,
 	}
 
 	return e, nil
-}
-
-func (e *Explorer) Attachment() io.ReadWriter {
-	return &e.attachment
 }
 
 func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
@@ -72,8 +74,8 @@ func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
 	if err != nil {
 		return fmt.Errorf("unable to spawn container: %w", err)
 	}
-	defer container.Close()
-	e.attachment.SetReaderWriter(container.Attachment(), container.Attachment())
+	defer e.container.Close()
+	e.container.SetContainer(container)
 
 	return e.server.Listen(ctx, func(event ServerEvent) error {
 		e.history.Add(event)
@@ -86,7 +88,7 @@ func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
 				return err
 			}
 		}
-		return callback(CommandEvent{
+		return callback(&CommandEvent{
 			Command:    event.Command,
 			Operation:  event.Operation,
 			State:      event.State,
@@ -96,14 +98,26 @@ func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
 }
 
 func (e *Explorer) Rebuild(ctx context.Context) error {
-	e.eventCallback(BuildStartEvent{})
+	if e.status == StatusBuilding {
+		return fmt.Errorf("build already in progress")
+	}
+	e.status = StatusBuilding
+	defer func() { e.status = StatusIdle }()
+
+	err := e.eventCallback(BuildStartEvent{})
+	if err != nil {
+		return err
+	}
 	progress := make(chan *buildkit.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		for status := range progress {
-			e.eventCallback(BuildProgressEvent{
+			err := e.eventCallback(BuildProgressEvent{
 				Status: status,
 			})
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -115,13 +129,13 @@ func (e *Explorer) Rebuild(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func (e *Explorer) BuildToLayer(ctx context.Context, layerID string) error {
-	return fmt.Errorf("not implemented")
-}
-
 func (e *Explorer) Close() error {
 	if err := e.builder.Close(); err != nil {
 		return err
 	}
 	return e.server.Close()
+}
+
+func (e *Explorer) ContainerProxy() *ContainerProxy {
+	return &e.container
 }

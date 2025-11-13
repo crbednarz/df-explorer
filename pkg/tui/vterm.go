@@ -5,21 +5,22 @@ import (
 	"io"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/crbednarz/df-explorer/pkg/explorer"
 	vterm "github.com/crbednarz/df-explorer/pkg/vterm"
 	"github.com/muesli/cancelreader"
 )
 
 type vtermPanel struct {
 	term             *vterm.VTerm
-	attachment       io.ReadWriter
+	explorer         *explorer.Explorer
 	attachmentReader cancelreader.CancelReader
 }
 
-func newVTermPanel(attachment io.ReadWriter) *vtermPanel {
+func newVTermPanel(explorer *explorer.Explorer) *vtermPanel {
 	vterm := vterm.New(80, 20)
 	return &vtermPanel{
-		term:       vterm,
-		attachment: attachment,
+		term:     vterm,
+		explorer: explorer,
 	}
 }
 
@@ -28,7 +29,7 @@ func (vt *vtermPanel) Write(data []byte) (int, error) {
 }
 
 func (vt *vtermPanel) Init() tea.Cmd {
-	attachmentReader, err := cancelreader.NewReader(vt.attachment)
+	attachmentReader, err := cancelreader.NewReader(vt.explorer.ContainerProxy())
 	if err != nil {
 		return func() tea.Msg {
 			return FatalErrorMsg{Err: fmt.Errorf("error creating cancelable reader for container attachment: %w", err)}
@@ -36,7 +37,7 @@ func (vt *vtermPanel) Init() tea.Cmd {
 	}
 	vt.attachmentReader = attachmentReader
 	vt.term.SetWriteCallback(func(data []byte) {
-		vt.attachment.Write(data)
+		vt.explorer.ContainerProxy().Write(data)
 	})
 	return func() tea.Msg {
 		_, err := io.Copy(vt.term, attachmentReader)
@@ -74,7 +75,7 @@ func (vt *vtermPanel) View() string {
 
 func (vt *vtermPanel) SetSize(width int, height int) {
 	vt.term.SetSize(width, height)
-	vt.attachment.Write([]byte(fmt.Sprintf("\x1b[8;%d;%dt", height, width)))
+	vt.explorer.ContainerProxy().Write([]byte(fmt.Sprintf("\x1b[8;%d;%dt", height, width)))
 }
 
 func (vt *vtermPanel) Close() error {

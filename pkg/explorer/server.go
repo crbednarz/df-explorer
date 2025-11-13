@@ -68,7 +68,7 @@ func newServer() (*Server, error) {
 	return server, nil
 }
 
-func (s *Server) SpawnContainer(ctx context.Context, cli *client.Client, image string) (*docker.Container, error) {
+func (s *Server) SpawnContainer(ctx context.Context, cli *client.Client, image string) (docker.Container, error) {
 	container, err := docker.NewContainer(
 		ctx,
 		cli,

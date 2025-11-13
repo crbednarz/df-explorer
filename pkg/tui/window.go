@@ -12,13 +12,15 @@ import (
 type windowModel struct {
 	main         *dockerfileView
 	terminal     *vtermPanel
+	controller   *controller
 	vtermFocused bool
 }
 
 func newWindow(explorer *explorer.Explorer) *windowModel {
 	return &windowModel{
 		main:         newDockerfileView(),
-		terminal:     newVTermPanel(explorer.Attachment()),
+		terminal:     newVTermPanel(explorer),
+		controller:   newController(explorer),
 		vtermFocused: true,
 	}
 }
@@ -34,12 +36,18 @@ func animate() tea.Cmd {
 }
 
 func (m *windowModel) Init() tea.Cmd {
-	return tea.Batch(m.main.Init(), m.terminal.Init(), animate())
+	return tea.Batch(
+		m.main.Init(),
+		m.terminal.Init(),
+		m.controller.Init(),
+		animate(),
+	)
 }
 
 func (m *windowModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	var mainCmd tea.Cmd
 	var terminalCmd tea.Cmd
+	var controllerCmd tea.Cmd
 
 	switch msg := message.(type) {
 	case tea.KeyMsg:
@@ -64,8 +72,9 @@ func (m *windowModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	window, windowCmd := m.updateSelf(message)
 	m.main, mainCmd = m.main.Update(message)
 	m.terminal, terminalCmd = m.terminal.Update(message)
+	m.controller, controllerCmd = m.controller.Update(message)
 
-	return window, tea.Batch(windowCmd, mainCmd, terminalCmd)
+	return window, tea.Batch(windowCmd, mainCmd, terminalCmd, controllerCmd)
 }
 
 func (m *windowModel) updateSelf(message tea.Msg) (tea.Model, tea.Cmd) {

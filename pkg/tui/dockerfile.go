@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +19,11 @@ type dockerfileView struct {
 	blockList  list.Model
 	viewport   viewport.Model
 	chunkMap   map[string]*sourceChunkItem
+	keys       dockerfileViewKeyMap
+}
+
+type dockerfileViewKeyMap struct {
+	Rebuild key.Binding
 }
 
 type BuildStatus int
@@ -38,9 +44,9 @@ type sourceChunkItem struct {
 var (
 	itemStyle         = lipgloss.NewStyle().PaddingLeft(1)
 	selectedItemStyle = itemStyle.Foreground(lipgloss.Color("170"))
-	pendingStyle      = itemStyle.Foreground(lipgloss.Color("244"))
-	inProgressStyle   = itemStyle.Foreground(lipgloss.Color("33"))
-	completedStyle    = itemStyle.Foreground(lipgloss.Color("34"))
+	pendingStyle      = itemStyle.Foreground(lipgloss.Color("#ffff00"))
+	inProgressStyle   = itemStyle.Foreground(lipgloss.Color("#ff0000"))
+	completedStyle    = itemStyle.Foreground(lipgloss.Color("#00ff00"))
 	noStageStyle      = itemStyle.Foreground(lipgloss.Color("240"))
 )
 
@@ -49,6 +55,12 @@ func newDockerfileView() *dockerfileView {
 	return &dockerfileView{
 		viewport:  viewport.New(80, 40),
 		blockList: list.New(nil, d, 80, 40),
+		keys: dockerfileViewKeyMap{
+			Rebuild: key.NewBinding(
+				key.WithKeys("r"),
+				key.WithHelp("r", "rebuild"),
+			),
+		},
 	}
 }
 
@@ -56,6 +68,11 @@ func (df *dockerfileView) SetSize(width int, height int) {
 	df.viewport.Width = width
 	df.viewport.Height = height
 	df.blockList.SetSize(width, height)
+	df.blockList.AdditionalFullHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			df.keys.Rebuild,
+		}
+	}
 }
 
 func (df *dockerfileView) Init() tea.Cmd {
@@ -72,6 +89,13 @@ func (df *dockerfileView) Update(msg tea.Msg) (*dockerfileView, tea.Cmd) {
 		}
 	case explorer.BuildProgressEvent:
 		df.handleProgress(msg)
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, df.keys.Rebuild):
+			return df, func() tea.Msg {
+				return RebuildRequestMsg{}
+			}
+		}
 	}
 	var viewportCmd, listCmd tea.Cmd
 	df.viewport, viewportCmd = df.viewport.Update(msg)
@@ -119,6 +143,19 @@ func (df *dockerfileView) handleProgress(event explorer.BuildProgressEvent) {
 			if vertex.Completed != nil {
 				chunk.Status = StatusCompleted
 			} else if vertex.Started != nil {
+				chunk.Status = StatusInProgress
+			} else {
+				chunk.Status = StatusPending
+			}
+		}
+	}
+
+	for _, s := range status.Statuses {
+		chunk, ok := df.chunkMap[string(s.Vertex)]
+		if ok {
+			if s.Completed != nil {
+				chunk.Status = StatusCompleted
+			} else if s.Started != nil {
 				chunk.Status = StatusInProgress
 			} else {
 				chunk.Status = StatusPending
