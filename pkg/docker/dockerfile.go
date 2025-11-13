@@ -170,8 +170,9 @@ func (df *Dockerfile) rebuildSourceMap() error {
 		}
 	}
 	chunks = append(chunks, SourceChunk{
-		Text:     joinLines(lines[chunkStart:]),
-		Metadata: lastMeta,
+		Text:       joinLines(lines[chunkStart:]),
+		Metadata:   lastMeta,
+		VertexHash: string(lastVertex),
 	})
 
 	df.source = &Source{
