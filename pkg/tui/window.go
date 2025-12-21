@@ -7,10 +7,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
+	"github.com/crbednarz/df-explorer/pkg/tui/dockerfile"
+	"github.com/crbednarz/df-explorer/pkg/tui/message"
 )
 
 type windowModel struct {
-	main         *dockerfileView
+	main         *dockerfile.Model
 	terminal     *vtermPanel
 	controller   *controller
 	vtermFocused bool
@@ -18,7 +20,7 @@ type windowModel struct {
 
 func newWindow(explorer *explorer.Explorer) *windowModel {
 	return &windowModel{
-		main:         newDockerfileView(),
+		main:         dockerfile.New(),
 		terminal:     newVTermPanel(explorer),
 		controller:   newController(explorer),
 		vtermFocused: true,
@@ -44,12 +46,12 @@ func (m *windowModel) Init() tea.Cmd {
 	)
 }
 
-func (m *windowModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+func (m *windowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var mainCmd tea.Cmd
 	var terminalCmd tea.Cmd
 	var controllerCmd tea.Cmd
 
-	switch msg := message.(type) {
+	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+j":
@@ -59,26 +61,26 @@ func (m *windowModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.vtermFocused = !m.vtermFocused
 			return m, nil
 		default:
-			window, windowCmd := m.updateSelf(message)
+			window, windowCmd := m.updateSelf(msg)
 			if m.vtermFocused {
-				m.terminal, terminalCmd = m.terminal.Update(message)
+				m.terminal, terminalCmd = m.terminal.Update(msg)
 				return window, tea.Batch(windowCmd, terminalCmd)
 			} else {
-				m.main, mainCmd = m.main.Update(message)
+				m.main, mainCmd = m.main.Update(msg)
 				return window, tea.Batch(windowCmd, mainCmd)
 			}
 		}
 	}
-	window, windowCmd := m.updateSelf(message)
-	m.main, mainCmd = m.main.Update(message)
-	m.terminal, terminalCmd = m.terminal.Update(message)
-	m.controller, controllerCmd = m.controller.Update(message)
+	window, windowCmd := m.updateSelf(msg)
+	m.main, mainCmd = m.main.Update(msg)
+	m.terminal, terminalCmd = m.terminal.Update(msg)
+	m.controller, controllerCmd = m.controller.Update(msg)
 
 	return window, tea.Batch(windowCmd, mainCmd, terminalCmd, controllerCmd)
 }
 
-func (m *windowModel) updateSelf(message tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := message.(type) {
+func (m *windowModel) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
@@ -89,7 +91,7 @@ func (m *windowModel) updateSelf(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.main.SetSize(msg.Width, msg.Height-10)
 	case frameMsg:
 		return m, animate()
-	case FatalErrorMsg:
+	case message.FatalError:
 		fmt.Println("Fatal error:", msg.Err)
 		return m, tea.Quit
 	}

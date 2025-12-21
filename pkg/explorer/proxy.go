@@ -1,7 +1,6 @@
 package explorer
 
 import (
-	"io"
 	"sync"
 
 	"github.com/crbednarz/df-explorer/pkg/docker"
@@ -15,25 +14,25 @@ type ContainerProxy struct {
 }
 
 // Write writes to the underlying container's attachment.
-// If no container is set, it returns io.EOF.
+// If no container is set, it returns (0, nil).
 func (c *ContainerProxy) Write(p []byte) (n int, err error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.container != nil {
 		return c.container.Attachment().Write(p)
 	}
-	return 0, io.EOF
+	return 0, nil
 }
 
 // Read reads from the underlying container's attachment.
-// If no container is set, it returns io.EOF.
+// If no container is set, it returns (0, nil).
 func (c *ContainerProxy) Read(p []byte) (n int, err error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.container != nil {
 		return c.container.Attachment().Read(p)
 	}
-	return 0, io.EOF
+	return 0, nil
 }
 
 // SetContainer sets the underlying container.

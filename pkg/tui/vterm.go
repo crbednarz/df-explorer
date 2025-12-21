@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
+	"github.com/crbednarz/df-explorer/pkg/tui/message"
 	vterm "github.com/crbednarz/df-explorer/pkg/vterm"
 	"github.com/muesli/cancelreader"
 )
@@ -32,7 +33,7 @@ func (vt *vtermPanel) Init() tea.Cmd {
 	attachmentReader, err := cancelreader.NewReader(vt.explorer.ContainerProxy())
 	if err != nil {
 		return func() tea.Msg {
-			return FatalErrorMsg{Err: fmt.Errorf("error creating cancelable reader for container attachment: %w", err)}
+			return message.FatalError{Err: fmt.Errorf("error creating cancelable reader for container attachment: %w", err)}
 		}
 	}
 	vt.attachmentReader = attachmentReader
@@ -42,7 +43,7 @@ func (vt *vtermPanel) Init() tea.Cmd {
 	return func() tea.Msg {
 		_, err := io.Copy(vt.term, attachmentReader)
 		if err != nil {
-			return FatalErrorMsg{Err: fmt.Errorf("error reading from container attachment: %w", err)}
+			return message.FatalError{Err: fmt.Errorf("error reading from container attachment: %w", err)}
 		}
 		return nil
 	}
