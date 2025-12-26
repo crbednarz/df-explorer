@@ -11,8 +11,13 @@ import (
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
 )
 
+var (
+	panelActiveStyle   = lipgloss.NewStyle().Margin(0, 0).Border(lipgloss.NormalBorder(), false, false, false, true).BorderForeground(lipgloss.Color("4"))
+	panelInactiveStyle = lipgloss.NewStyle().Margin(0, 0).Border(lipgloss.NormalBorder(), false, false, false, true).BorderForeground(lipgloss.Color("8"))
+)
+
 type windowModel struct {
-	main         *dockerfile.Model
+	file         *dockerfile.Model
 	terminal     *vtermPanel
 	controller   *controller
 	vtermFocused bool
@@ -20,7 +25,7 @@ type windowModel struct {
 
 func newWindow(explorer *explorer.Explorer) *windowModel {
 	return &windowModel{
-		main:         dockerfile.New(),
+		file:         dockerfile.New(),
 		terminal:     newVTermPanel(explorer),
 		controller:   newController(explorer),
 		vtermFocused: true,
@@ -39,7 +44,7 @@ func animate() tea.Cmd {
 
 func (m *windowModel) Init() tea.Cmd {
 	return tea.Batch(
-		m.main.Init(),
+		m.file.Init(),
 		m.terminal.Init(),
 		m.controller.Init(),
 		animate(),
@@ -66,13 +71,13 @@ func (m *windowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.terminal, terminalCmd = m.terminal.Update(msg)
 				return window, tea.Batch(windowCmd, terminalCmd)
 			} else {
-				m.main, mainCmd = m.main.Update(msg)
+				m.file, mainCmd = m.file.Update(msg)
 				return window, tea.Batch(windowCmd, mainCmd)
 			}
 		}
 	}
 	window, windowCmd := m.updateSelf(msg)
-	m.main, mainCmd = m.main.Update(msg)
+	m.file, mainCmd = m.file.Update(msg)
 	m.terminal, terminalCmd = m.terminal.Update(msg)
 	m.controller, controllerCmd = m.controller.Update(msg)
 
@@ -87,8 +92,8 @@ func (m *windowModel) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case tea.WindowSizeMsg:
-		m.terminal.SetSize(msg.Width, 10)
-		m.main.SetSize(msg.Width, msg.Height-10)
+		m.terminal.SetSize(msg.Width-1, 10)
+		m.file.SetSize(msg.Width-1, msg.Height-10)
 	case frameMsg:
 		return m, animate()
 	case message.FatalError:
@@ -100,6 +105,14 @@ func (m *windowModel) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *windowModel) View() string {
 	vtermView := m.terminal.View()
-	mainView := m.main.View()
-	return lipgloss.JoinVertical(lipgloss.Left, mainView, vtermView)
+	fileView := m.file.View()
+
+	if m.vtermFocused {
+		vtermView = panelActiveStyle.Render(vtermView)
+		fileView = panelInactiveStyle.Render(fileView)
+	} else {
+		vtermView = panelInactiveStyle.Render(vtermView)
+		fileView = panelActiveStyle.Render(fileView)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, fileView, vtermView)
 }

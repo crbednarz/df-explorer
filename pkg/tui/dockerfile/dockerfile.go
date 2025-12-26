@@ -9,6 +9,7 @@ import (
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
+	"github.com/crbednarz/df-explorer/pkg/tui/style"
 )
 
 type Model struct {
@@ -44,7 +45,6 @@ func New() *Model {
 			),
 		},
 	}
-	m.blockList.SetShowTitle(false)
 	m.blockList.SetShowStatusBar(false)
 	m.blockList.SetFilteringEnabled(false)
 	m.blockList.SetShowHelp(false)
@@ -85,14 +85,16 @@ func (m *Model) View() string {
 	}
 
 	m.viewport.SetContent(m.blockList.View())
-	return m.viewport.View()
+	output := m.viewport.View()
+	return output
 }
 
 func (m *Model) SetSize(width int, height int) {
-	m.viewport.Width = width
-	m.viewport.Height = height
+	x, y := style.PanelBorder.GetFrameSize()
+	m.viewport.Width = width - x
+	m.viewport.Height = height - y
 
-	m.blockList.SetSize(width, height)
+	m.blockList.SetSize(m.viewport.Width, m.viewport.Height)
 	m.blockList.AdditionalFullHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			m.keys.Rebuild,
@@ -119,6 +121,7 @@ func (m *Model) setDockerfile(dockerfile *docker.Dockerfile) {
 	}
 
 	m.blockList.SetItems(sourceBlocks)
+	m.blockList.Title = titleFromDockerfile(dockerfile)
 	m.chunkMap = chunkMap
 	m.dockerfile = dockerfile
 }
@@ -150,4 +153,8 @@ func (m *Model) handleProgress(event explorer.BuildProgressEvent) {
 			}
 		}
 	}
+}
+
+func titleFromDockerfile(dockerfile *docker.Dockerfile) string {
+	return dockerfile.FileName()
 }

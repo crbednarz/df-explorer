@@ -71,6 +71,18 @@ func (df *Dockerfile) ImageID() string {
 	return df.imageID
 }
 
+func (df *Dockerfile) Source() *Source {
+	return df.source
+}
+
+func (df *Dockerfile) FileName() string {
+	return filepath.Base(df.dockerfile)
+}
+
+func (df *Dockerfile) Path() string {
+	return df.dockerfile
+}
+
 func (df *Dockerfile) Build(ctx context.Context, builder *Builder, progress chan *buildkit.SolveStatus) (string, error) {
 	imageID, err := builder.Build(
 		ctx,
@@ -179,10 +191,6 @@ func (df *Dockerfile) rebuildSourceMap() error {
 		Chunks: chunks,
 	}
 	return nil
-}
-
-func (df *Dockerfile) Source() *Source {
-	return df.source
 }
 
 type lineMetadata struct {

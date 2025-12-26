@@ -19,6 +19,14 @@ type sourceOp struct {
 	Status   BuildStatus
 }
 
-func (s sourceOp) FilterValue() string { return s.Text }
-func (s sourceOp) Title() string       { return s.Text }
-func (s sourceOp) Description() string { return "" }
+func (s *sourceOp) FilterValue() string {
+	return s.Text
+}
+
+func (s *sourceOp) Title() string {
+	return s.Text
+}
+
+func (s *sourceOp) Description() string {
+	return ""
+}
