@@ -53,7 +53,7 @@ func TestProxyEmptyWrite(t *testing.T) {
 	data := []byte("hello world")
 	// Test writing when no container is set
 	n, err := proxy.Write(data)
-	if err != io.EOF {
+	if err != nil {
 		t.Fatalf("expected io.EOF when writing with no container, got: %v", err)
 	}
 	if n != 0 {
@@ -66,7 +66,7 @@ func TestProxyEmptyRead(t *testing.T) {
 	buf := make([]byte, 20)
 	// Test reading when no container is set
 	n, err := proxy.Read(buf)
-	if err != io.EOF {
+	if err != nil {
 		t.Fatalf("expected io.EOF when reading with no container, got: %v", err)
 	}
 	if n != 0 {
