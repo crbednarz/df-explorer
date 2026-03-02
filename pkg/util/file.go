@@ -6,6 +6,9 @@ import (
 	"path"
 )
 
+// CachDir returns a shared cache directory for this utility.
+// Example: ~/.cache/df-explorer/
+// If the directory does not exist, it will be created.
 func CacheDir() (string, error) {
 	userCacheDir, err := os.UserCacheDir()
 	if err != nil {

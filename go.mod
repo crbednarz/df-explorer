@@ -13,6 +13,7 @@ require (
 	github.com/muesli/cancelreader v0.2.2
 	github.com/nxadm/tail v1.4.11
 	github.com/opencontainers/go-digest v1.0.0
+	github.com/stretchr/testify v1.10.0
 	github.com/tonistiigi/fsutil v0.0.0-20250417144416-3f76f8130144
 	golang.org/x/sync v0.14.0
 	golang.org/x/term v0.32.0
@@ -101,5 +102,6 @@ require (
 	google.golang.org/grpc v1.72.1 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )
