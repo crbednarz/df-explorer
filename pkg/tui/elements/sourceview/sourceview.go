@@ -1,4 +1,4 @@
-package dockerfile
+package sourceview
 
 import (
 	"github.com/charmbracelet/bubbles/key"
@@ -17,10 +17,10 @@ type Model struct {
 	sectionList list.Model
 	viewport    viewport.Model
 	sectionMap  map[string]*sectionItem
-	keys        dockerfileViewKeyMap
+	keys        sourceViewKeyMap
 }
 
-type dockerfileViewKeyMap struct {
+type sourceViewKeyMap struct {
 	Rebuild key.Binding
 }
 
@@ -38,7 +38,7 @@ func New() *Model {
 	m := &Model{
 		sectionList: list.New(nil, d, 80, 40),
 		viewport:    viewport.New(80, 40),
-		keys: dockerfileViewKeyMap{
+		keys: sourceViewKeyMap{
 			Rebuild: key.NewBinding(
 				key.WithKeys("r"),
 				key.WithHelp("r", "rebuild"),

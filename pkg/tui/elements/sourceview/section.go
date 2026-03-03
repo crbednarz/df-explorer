@@ -1,4 +1,4 @@
-package dockerfile
+package sourceview
 
 import (
 	"fmt"

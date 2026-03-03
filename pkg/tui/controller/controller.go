@@ -1,4 +1,4 @@
-package tui
+package controller
 
 import (
 	"context"
@@ -8,21 +8,21 @@ import (
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
 )
 
-type controller struct {
+type Model struct {
 	explorer *explorer.Explorer
 }
 
-func newController(explorer *explorer.Explorer) *controller {
-	return &controller{
+func New(explorer *explorer.Explorer) *Model {
+	return &Model{
 		explorer: explorer,
 	}
 }
 
-func (c *controller) Init() tea.Cmd {
+func (c *Model) Init() tea.Cmd {
 	return nil
 }
 
-func (c *controller) Update(msg tea.Msg) (*controller, tea.Cmd) {
+func (c *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	switch msg.(type) {
 	case message.RebuildRequest:
 		return c, func() tea.Msg {
@@ -33,6 +33,6 @@ func (c *controller) Update(msg tea.Msg) (*controller, tea.Cmd) {
 	return c, nil
 }
 
-func (c *controller) View() string {
+func (c *Model) View() string {
 	return ""
 }

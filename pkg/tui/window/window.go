@@ -1,4 +1,4 @@
-package tui
+package window
 
 import (
 	"fmt"
@@ -7,7 +7,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
-	"github.com/crbednarz/df-explorer/pkg/tui/dockerfile"
+	"github.com/crbednarz/df-explorer/pkg/tui/controller"
+	"github.com/crbednarz/df-explorer/pkg/tui/elements/sourceview"
+	"github.com/crbednarz/df-explorer/pkg/tui/elements/terminal"
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
 )
 
@@ -16,18 +18,18 @@ var (
 	panelInactiveStyle = lipgloss.NewStyle().Margin(0, 0).Border(lipgloss.NormalBorder(), false, false, false, true).BorderForeground(lipgloss.Color("8"))
 )
 
-type windowModel struct {
-	file         *dockerfile.Model
-	terminal     *vtermPanel
-	controller   *controller
+type Model struct {
+	file         *sourceview.Model
+	term         *terminal.Model
+	controller   *controller.Model
 	vtermFocused bool
 }
 
-func newWindow(explorer *explorer.Explorer) *windowModel {
-	return &windowModel{
-		file:         dockerfile.New(),
-		terminal:     newVTermPanel(explorer),
-		controller:   newController(explorer),
+func New(explorer *explorer.Explorer) *Model {
+	return &Model{
+		file:         sourceview.New(),
+		term:         terminal.New(explorer),
+		controller:   controller.New(explorer),
 		vtermFocused: true,
 	}
 }
@@ -42,16 +44,16 @@ func animate() tea.Cmd {
 	})
 }
 
-func (m *windowModel) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.file.Init(),
-		m.terminal.Init(),
+		m.term.Init(),
 		m.controller.Init(),
 		animate(),
 	)
 }
 
-func (m *windowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var mainCmd tea.Cmd
 	var terminalCmd tea.Cmd
 	var controllerCmd tea.Cmd
@@ -68,7 +70,7 @@ func (m *windowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			window, windowCmd := m.updateSelf(msg)
 			if m.vtermFocused {
-				m.terminal, terminalCmd = m.terminal.Update(msg)
+				m.term, terminalCmd = m.term.Update(msg)
 				return window, tea.Batch(windowCmd, terminalCmd)
 			} else {
 				m.file, mainCmd = m.file.Update(msg)
@@ -78,13 +80,13 @@ func (m *windowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	window, windowCmd := m.updateSelf(msg)
 	m.file, mainCmd = m.file.Update(msg)
-	m.terminal, terminalCmd = m.terminal.Update(msg)
+	m.term, terminalCmd = m.term.Update(msg)
 	m.controller, controllerCmd = m.controller.Update(msg)
 
 	return window, tea.Batch(windowCmd, mainCmd, terminalCmd, controllerCmd)
 }
 
-func (m *windowModel) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -92,7 +94,7 @@ func (m *windowModel) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case tea.WindowSizeMsg:
-		m.terminal.SetSize(msg.Width-1, 10)
+		m.term.SetSize(msg.Width-1, 10)
 		m.file.SetSize(msg.Width-1, msg.Height-10)
 	case frameMsg:
 		return m, animate()
@@ -103,8 +105,8 @@ func (m *windowModel) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *windowModel) View() string {
-	vtermView := m.terminal.View()
+func (m *Model) View() string {
+	vtermView := m.term.View()
 	fileView := m.file.View()
 
 	if m.vtermFocused {

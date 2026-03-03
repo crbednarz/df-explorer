@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
+	"github.com/crbednarz/df-explorer/pkg/tui/window"
 	"github.com/docker/docker/client"
 	"github.com/muesli/cancelreader"
 	"golang.org/x/sync/errgroup"
@@ -16,7 +17,7 @@ import (
 
 type App struct {
 	explorer *explorer.Explorer
-	window   *windowModel
+	window   *window.Model
 }
 
 func NewApp(ctx context.Context, cli *client.Client) (*App, error) {
@@ -27,7 +28,7 @@ func NewApp(ctx context.Context, cli *client.Client) (*App, error) {
 
 	return &App{
 		explorer: e,
-		window:   newWindow(e),
+		window:   window.New(e),
 	}, nil
 }
 
