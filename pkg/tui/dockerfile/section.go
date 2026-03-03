@@ -7,24 +7,52 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/moby/buildkit/client/llb"
 )
 
-type itemDelegate struct{}
+type BuildStatus int
 
-func (d itemDelegate) Height() int {
+const (
+	StatusPending BuildStatus = iota
+	StatusInProgress
+	StatusCompleted
+)
+
+type sectionItem struct {
+	Text     string
+	Metadata *llb.OpMetadata
+	Vertex   string
+	Status   BuildStatus
+}
+
+func (s *sectionItem) FilterValue() string {
+	return s.Text
+}
+
+func (s *sectionItem) Title() string {
+	return s.Text
+}
+
+func (s *sectionItem) Description() string {
+	return ""
+}
+
+type sectionDelegate struct{}
+
+func (d sectionDelegate) Height() int {
 	return 1
 }
 
-func (d itemDelegate) Spacing() int {
+func (d sectionDelegate) Spacing() int {
 	return 0
 }
 
-func (d itemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd {
+func (d sectionDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd {
 	return nil
 }
 
-func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	block, ok := listItem.(*sourceOp)
+func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	block, ok := listItem.(*sectionItem)
 	if !ok {
 		return
 	}

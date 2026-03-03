@@ -13,11 +13,11 @@ import (
 )
 
 type Model struct {
-	dockerfile *docker.Dockerfile
-	blockList  list.Model
-	viewport   viewport.Model
-	chunkMap   map[string]*sourceOp
-	keys       dockerfileViewKeyMap
+	dockerfile  *docker.Dockerfile
+	sectionList list.Model
+	viewport    viewport.Model
+	sectionMap  map[string]*sectionItem
+	keys        dockerfileViewKeyMap
 }
 
 type dockerfileViewKeyMap struct {
@@ -34,10 +34,10 @@ var (
 )
 
 func New() *Model {
-	d := itemDelegate{}
+	d := sectionDelegate{}
 	m := &Model{
-		blockList: list.New(nil, d, 80, 40),
-		viewport:  viewport.New(80, 40),
+		sectionList: list.New(nil, d, 80, 40),
+		viewport:    viewport.New(80, 40),
 		keys: dockerfileViewKeyMap{
 			Rebuild: key.NewBinding(
 				key.WithKeys("r"),
@@ -45,9 +45,9 @@ func New() *Model {
 			),
 		},
 	}
-	m.blockList.SetShowStatusBar(false)
-	m.blockList.SetFilteringEnabled(false)
-	m.blockList.SetShowHelp(false)
+	m.sectionList.SetShowStatusBar(false)
+	m.sectionList.SetFilteringEnabled(false)
+	m.sectionList.SetShowHelp(false)
 	return m
 }
 
@@ -60,8 +60,8 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	case explorer.DockerfileEvent:
 		m.setDockerfile(msg.Dockerfile)
 	case explorer.BuildStartEvent:
-		for _, chunk := range m.chunkMap {
-			chunk.Status = StatusPending
+		for _, section := range m.sectionMap {
+			section.Status = StatusPending
 		}
 	case explorer.BuildProgressEvent:
 		m.handleProgress(msg)
@@ -75,7 +75,7 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	}
 	var viewportCmd, listCmd tea.Cmd
 	m.viewport, viewportCmd = m.viewport.Update(msg)
-	m.blockList, listCmd = m.blockList.Update(msg)
+	m.sectionList, listCmd = m.sectionList.Update(msg)
 	return m, tea.Batch(viewportCmd, listCmd)
 }
 
@@ -84,7 +84,7 @@ func (m *Model) View() string {
 		return ""
 	}
 
-	m.viewport.SetContent(m.blockList.View())
+	m.viewport.SetContent(m.sectionList.View())
 	output := m.viewport.View()
 	return output
 }
@@ -94,8 +94,8 @@ func (m *Model) SetSize(width int, height int) {
 	m.viewport.Width = width - x
 	m.viewport.Height = height - y
 
-	m.blockList.SetSize(m.viewport.Width, m.viewport.Height)
-	m.blockList.AdditionalFullHelpKeys = func() []key.Binding {
+	m.sectionList.SetSize(m.viewport.Width, m.viewport.Height)
+	m.sectionList.AdditionalFullHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			m.keys.Rebuild,
 		}
@@ -103,53 +103,54 @@ func (m *Model) SetSize(width int, height int) {
 }
 
 func (m *Model) setDockerfile(dockerfile *docker.Dockerfile) {
-	chunks := dockerfile.Source().Chunks
+	sections := dockerfile.Source().Sections
 
-	sourceBlocks := make([]list.Item, len(chunks))
-	chunkMap := make(map[string]*sourceOp)
+	sectionItemMap := make(map[string]*sectionItem)
+	sectionItems := make([]list.Item, len(sections))
 
-	for i, chunk := range chunks {
-		chunk := &sourceOp{
-			Text:     chunk.Text,
-			Metadata: chunk.Metadata,
-			Vertex:   chunk.VertexHash,
+	for i, section := range sections {
+		item := &sectionItem{
+			Text:     section.Text,
+			Metadata: section.Metadata,
+			Vertex:   section.VertexHash,
 		}
-		sourceBlocks[i] = chunk
-		if chunk.Metadata != nil {
-			chunkMap[chunk.Vertex] = chunk
+
+		sectionItems[i] = item
+		if item.Metadata != nil {
+			sectionItemMap[item.Vertex] = item
 		}
 	}
 
-	m.blockList.SetItems(sourceBlocks)
-	m.blockList.Title = titleFromDockerfile(dockerfile)
-	m.chunkMap = chunkMap
+	m.sectionList.SetItems(sectionItems)
+	m.sectionList.Title = titleFromDockerfile(dockerfile)
+	m.sectionMap = sectionItemMap
 	m.dockerfile = dockerfile
 }
 
 func (m *Model) handleProgress(event explorer.BuildProgressEvent) {
 	status := event.Status
 	for _, vertex := range status.Vertexes {
-		chunk, ok := m.chunkMap[string(vertex.Digest)]
+		section, ok := m.sectionMap[string(vertex.Digest)]
 		if ok {
 			if vertex.Completed != nil {
-				chunk.Status = StatusCompleted
+				section.Status = StatusCompleted
 			} else if vertex.Started != nil {
-				chunk.Status = StatusInProgress
+				section.Status = StatusInProgress
 			} else {
-				chunk.Status = StatusPending
+				section.Status = StatusPending
 			}
 		}
 	}
 
 	for _, s := range status.Statuses {
-		chunk, ok := m.chunkMap[string(s.Vertex)]
+		section, ok := m.sectionMap[string(s.Vertex)]
 		if ok {
 			if s.Completed != nil {
-				chunk.Status = StatusCompleted
+				section.Status = StatusCompleted
 			} else if s.Started != nil {
-				chunk.Status = StatusInProgress
+				section.Status = StatusInProgress
 			} else {
-				chunk.Status = StatusPending
+				section.Status = StatusPending
 			}
 		}
 	}

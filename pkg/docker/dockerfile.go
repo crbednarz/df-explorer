@@ -49,10 +49,10 @@ type Dockerfile struct {
 }
 
 type Source struct {
-	Chunks []SourceChunk
+	Sections []SourceSection
 }
 
-type SourceChunk struct {
+type SourceSection struct {
 	Text       string
 	VertexHash string
 	Metadata   *llb.OpMetadata
@@ -163,32 +163,32 @@ func (df *Dockerfile) rebuildSourceMap() error {
 		return fmt.Errorf("unable to parse dockerfile lines: %w", err)
 	}
 
-	var chunks []SourceChunk
+	var sections []SourceSection
 	lastMeta := lines[0].Metadata
 	lastVertex := lines[0].VertexHash
-	chunkStart := 0
+	sectionStart := 0
 
 	for i := 1; i < len(lines); i++ {
 		meta := lines[i].Metadata
 		if meta != lastMeta {
-			chunks = append(chunks, SourceChunk{
-				Text:       joinLines(lines[chunkStart:i]),
+			sections = append(sections, SourceSection{
+				Text:       joinLines(lines[sectionStart:i]),
 				Metadata:   lastMeta,
 				VertexHash: string(lastVertex),
 			})
 			lastMeta = meta
 			lastVertex = lines[i].VertexHash
-			chunkStart = i
+			sectionStart = i
 		}
 	}
-	chunks = append(chunks, SourceChunk{
-		Text:       joinLines(lines[chunkStart:]),
+	sections = append(sections, SourceSection{
+		Text:       joinLines(lines[sectionStart:]),
 		Metadata:   lastMeta,
 		VertexHash: string(lastVertex),
 	})
 
 	df.source = &Source{
-		Chunks: chunks,
+		Sections: sections,
 	}
 	return nil
 }
