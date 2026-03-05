@@ -5,7 +5,6 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
@@ -24,17 +23,8 @@ type sourceViewKeyMap struct {
 	Rebuild key.Binding
 }
 
-var (
-	itemStyle         = lipgloss.NewStyle().PaddingLeft(1)
-	selectedItemStyle = itemStyle.Foreground(lipgloss.Color("170"))
-	pendingStyle      = itemStyle.Foreground(lipgloss.Color("#ffff00"))
-	inProgressStyle   = itemStyle.Foreground(lipgloss.Color("#ff0000"))
-	completedStyle    = itemStyle.Foreground(lipgloss.Color("#00ff00"))
-	noStageStyle      = itemStyle.Foreground(lipgloss.Color("240"))
-)
-
-func New() *Model {
-	d := sectionDelegate{}
+func New(theme *style.Theme) *Model {
+	d := newSectionDelegate(theme)
 	m := &Model{
 		sectionList: list.New(nil, d, 80, 40),
 		viewport:    viewport.New(80, 40),

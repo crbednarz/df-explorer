@@ -7,6 +7,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/crbednarz/df-explorer/pkg/tui/style"
 	"github.com/moby/buildkit/client/llb"
 )
 
@@ -37,7 +39,26 @@ func (s *sectionItem) Description() string {
 	return ""
 }
 
-type sectionDelegate struct{}
+type sectionDelegate struct {
+	itemStyle         lipgloss.Style
+	selectedItemStyle lipgloss.Style
+	pendingStyle      lipgloss.Style
+	inProgressStyle   lipgloss.Style
+	completedStyle    lipgloss.Style
+	noStageStyle      lipgloss.Style
+}
+
+func newSectionDelegate(theme *style.Theme) *sectionDelegate {
+	baseStyle := lipgloss.NewStyle().PaddingLeft(1).Background(theme.BackgroundColor)
+	return &sectionDelegate{
+		itemStyle:         baseStyle,
+		selectedItemStyle: baseStyle.Foreground(theme.AccentColor),
+		pendingStyle:      baseStyle,
+		inProgressStyle:   baseStyle,
+		completedStyle:    baseStyle,
+		noStageStyle:      baseStyle,
+	}
+}
 
 func (d sectionDelegate) Height() int {
 	return 1
@@ -60,23 +81,23 @@ func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 	str := block.Text
 
 	prefix := " "
-	style := itemStyle
+	style := d.itemStyle
 
 	if index == m.Index() {
-		style = selectedItemStyle
+		style = d.selectedItemStyle
 	} else if block.Metadata == nil {
-		style = noStageStyle
+		style = d.noStageStyle
 	} else {
 		switch block.Status {
 		case StatusPending:
-			style = pendingStyle
+			style = d.pendingStyle
 		case StatusInProgress:
 			animationTime := (time.Now().UnixMilli() / 250) % 4
 			animations := []string{"-", "\\", "|", "/"}
 			prefix = animations[animationTime]
-			style = inProgressStyle
+			style = d.inProgressStyle
 		case StatusCompleted:
-			style = completedStyle
+			style = d.completedStyle
 		}
 	}
 

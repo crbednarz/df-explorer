@@ -11,6 +11,7 @@ import (
 	"github.com/crbednarz/df-explorer/pkg/tui/elements/sourceview"
 	"github.com/crbednarz/df-explorer/pkg/tui/elements/terminal"
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
+	"github.com/crbednarz/df-explorer/pkg/tui/style"
 )
 
 var (
@@ -26,8 +27,9 @@ type Model struct {
 }
 
 func New(explorer *explorer.Explorer) *Model {
+	theme := style.DefaultTheme()
 	return &Model{
-		file:         sourceview.New(),
+		file:         sourceview.New(theme),
 		term:         terminal.New(explorer),
 		controller:   controller.New(explorer),
 		vtermFocused: true,
