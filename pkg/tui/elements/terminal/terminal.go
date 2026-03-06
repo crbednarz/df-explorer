@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
 	vterm "github.com/crbednarz/df-explorer/pkg/vterm"
@@ -51,17 +51,8 @@ func (m *Model) Init() tea.Cmd {
 
 func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 	switch msg := message.(type) {
-	case tea.KeyMsg:
-
-		switch msg.Type {
-		case tea.KeyRunes:
-			m.handleKeyMsg(msg)
-		default:
-			vtermKey, ok := keyTypeMap[msg.Type]
-			if ok {
-				m.vterm.WriteKey(vtermKey)
-			}
-		}
+	case tea.KeyPressMsg:
+		m.vterm.WriteKey(teaKeyToVtermKey(msg.Key()))
 	}
 	return m, nil
 }
@@ -94,6 +85,25 @@ func (m *Model) Height() int {
 	return height
 }
 
+func teaKeyToVtermKey(teaKey tea.Key) vterm.Key {
+	var vtermMod vterm.KeyModifier
+	switch teaKey.Mod {
+	case tea.ModShift:
+		vtermMod = vterm.KeyModShift
+	case tea.ModAlt:
+		vtermMod = vterm.KeyModAlt
+	case tea.ModCtrl:
+		vtermMod = vterm.KeyModCtrl
+	}
+
+	return vterm.Key{
+		IsUnichar: true,
+		Modifier:  vtermMod,
+		Code:      uint(teaKey.Code),
+	}
+}
+
+/*
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) {
 	switch msg.Type {
 	case tea.KeyRunes:
@@ -101,4 +111,4 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) {
 			m.vterm.WriteKey(vterm.Key{IsUnichar: true, Code: uint(rune)})
 		}
 	}
-}
+}*/

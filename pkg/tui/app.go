@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui/window"
 	"github.com/docker/docker/client"
@@ -46,7 +46,6 @@ func (a *App) Run(ctx context.Context) error {
 
 	p := tea.NewProgram(
 		a.window,
-		tea.WithAltScreen(),
 		tea.WithInput(stdinReader),
 		tea.WithFPS(60),
 	)

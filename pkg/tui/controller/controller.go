@@ -3,7 +3,7 @@ package controller
 import (
 	"context"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
 )

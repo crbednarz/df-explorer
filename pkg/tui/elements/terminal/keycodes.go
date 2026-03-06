@@ -1,17 +1,18 @@
 package terminal
 
-import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/crbednarz/df-explorer/pkg/vterm"
-)
+/*
+type teaKey struct {
+	Mod  tea.KeyMod
+	Code rune
+}
 
-var keyTypeMap = map[tea.KeyType]vterm.Key{
-	tea.KeyNull:      vterm.KeyNone,
-	tea.KeyBreak:     {Code: uint('c'), Modifier: vterm.KeyModCtrl, IsUnichar: true},
-	tea.KeyEnter:     vterm.KeyEnter,
-	tea.KeyBackspace: vterm.KeyBackspace,
-	tea.KeyTab:       vterm.KeyTab,
-	tea.KeyEsc:       vterm.KeyEscape,
+var keyTypeMap = map[teaKey]vterm.Key{
+	{Code: 0}:                     vterm.KeyNone,
+	{Code: 'c', Mod: tea.ModCtrl}: {Code: uint('c'), Modifier: vterm.KeyModCtrl, IsUnichar: true},
+	{Code: tea.KeyEnter}:          vterm.KeyEnter,
+	{Code: tea.KeyBackspace}:              vterm.KeyBackspace,
+	tea.KeyTab:                    vterm.KeyTab,
+	tea.KeyEsc:                    vterm.KeyEscape,
 
 	tea.KeyCtrlA:            {Code: uint('a'), Modifier: vterm.KeyModCtrl, IsUnichar: true},
 	tea.KeyCtrlB:            {Code: uint('b'), Modifier: vterm.KeyModCtrl, IsUnichar: true},
@@ -97,4 +98,4 @@ var keyTypeMap = map[tea.KeyType]vterm.Key{
 	tea.KeyF18: {Code: vterm.KeyFunction0.Code + 18},
 	tea.KeyF19: {Code: vterm.KeyFunction0.Code + 19},
 	tea.KeyF20: {Code: vterm.KeyFunction0.Code + 20},
-}
+}*/

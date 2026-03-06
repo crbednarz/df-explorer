@@ -5,9 +5,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/crbednarz/df-explorer/pkg/tui/style"
 	"github.com/moby/buildkit/client/llb"
 )
@@ -52,7 +52,7 @@ func newSectionDelegate(theme *style.Theme) *sectionDelegate {
 	baseStyle := lipgloss.NewStyle().PaddingLeft(1).Background(theme.BackgroundColor)
 	return &sectionDelegate{
 		itemStyle:         baseStyle,
-		selectedItemStyle: baseStyle.Foreground(theme.AccentColor),
+		selectedItemStyle: baseStyle.Background(theme.BackgroundAccentColor),
 		pendingStyle:      baseStyle,
 		inProgressStyle:   baseStyle,
 		completedStyle:    baseStyle,
@@ -78,8 +78,6 @@ func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 		return
 	}
 
-	str := block.Text
-
 	prefix := " "
 	style := d.itemStyle
 
@@ -100,6 +98,11 @@ func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 			style = d.completedStyle
 		}
 	}
+	text := fmt.Sprintf("%s %s", prefix, block.Text)
 
-	_, _ = fmt.Fprint(w, style.Render(fmt.Sprintf("%s %s", prefix, str)))
+	if index == m.Index() {
+		text += "\ntest"
+	}
+
+	_, _ = fmt.Fprint(w, style.Render(text))
 }

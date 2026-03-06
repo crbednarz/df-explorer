@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui/controller"
 	"github.com/crbednarz/df-explorer/pkg/tui/elements/sourceview"
@@ -107,7 +107,7 @@ func (m *Model) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) View() string {
+func (m *Model) View() tea.View {
 	vtermView := m.term.View()
 	fileView := m.file.View()
 
@@ -118,5 +118,7 @@ func (m *Model) View() string {
 		vtermView = panelInactiveStyle.Render(vtermView)
 		fileView = panelActiveStyle.Render(fileView)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, fileView, vtermView)
+	view := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, fileView, vtermView))
+	view.AltScreen = true
+	return view
 }

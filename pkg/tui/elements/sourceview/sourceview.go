@@ -1,10 +1,10 @@
 package sourceview
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
@@ -27,7 +27,7 @@ func New(theme *style.Theme) *Model {
 	d := newSectionDelegate(theme)
 	m := &Model{
 		sectionList: list.New(nil, d, 80, 40),
-		viewport:    viewport.New(80, 40),
+		viewport:    viewport.New(viewport.WithWidth(80), viewport.WithHeight(40)),
 		keys: sourceViewKeyMap{
 			Rebuild: key.NewBinding(
 				key.WithKeys("r"),
@@ -81,10 +81,10 @@ func (m *Model) View() string {
 
 func (m *Model) SetSize(width int, height int) {
 	x, y := style.PanelBorder.GetFrameSize()
-	m.viewport.Width = width - x
-	m.viewport.Height = height - y
+	m.viewport.SetWidth(width - x)
+	m.viewport.SetHeight(height - y)
 
-	m.sectionList.SetSize(m.viewport.Width, m.viewport.Height)
+	m.sectionList.SetSize(m.viewport.Width(), m.viewport.Height())
 	m.sectionList.AdditionalFullHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			m.keys.Rebuild,

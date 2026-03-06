@@ -1,7 +1,7 @@
 package elements
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 type Element interface {
