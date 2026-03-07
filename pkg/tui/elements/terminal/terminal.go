@@ -96,19 +96,14 @@ func teaKeyToVtermKey(teaKey tea.Key) vterm.Key {
 		vtermMod = vterm.KeyModCtrl
 	}
 
+	code := uint(teaKey.Code)
+	if teaKey.Text != "" {
+		code = uint(teaKey.Text[0])
+	}
+
 	return vterm.Key{
 		IsUnichar: true,
 		Modifier:  vtermMod,
-		Code:      uint(teaKey.Code),
+		Code:      code,
 	}
 }
-
-/*
-func (m *Model) handleKeyMsg(msg tea.KeyMsg) {
-	switch msg.Type {
-	case tea.KeyRunes:
-		for _, rune := range msg.Runes {
-			m.vterm.WriteKey(vterm.Key{IsUnichar: true, Code: uint(rune)})
-		}
-	}
-}*/
