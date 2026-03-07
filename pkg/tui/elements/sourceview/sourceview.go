@@ -3,7 +3,6 @@ package sourceview
 import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
@@ -14,7 +13,6 @@ import (
 type Model struct {
 	dockerfile  *docker.Dockerfile
 	sectionList list.Model
-	viewport    viewport.Model
 	sectionMap  map[string]*sectionItem
 	keys        sourceViewKeyMap
 }
@@ -27,7 +25,6 @@ func New(theme *style.Theme) *Model {
 	d := newSectionDelegate(theme)
 	m := &Model{
 		sectionList: list.New(nil, d, 80, 40),
-		viewport:    viewport.New(viewport.WithWidth(80), viewport.WithHeight(40)),
 		keys: sourceViewKeyMap{
 			Rebuild: key.NewBinding(
 				key.WithKeys("r"),
@@ -42,7 +39,7 @@ func New(theme *style.Theme) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return m.viewport.Init()
+	return nil
 }
 
 func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
@@ -63,10 +60,9 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 			}
 		}
 	}
-	var viewportCmd, listCmd tea.Cmd
-	m.viewport, viewportCmd = m.viewport.Update(msg)
+	var listCmd tea.Cmd
 	m.sectionList, listCmd = m.sectionList.Update(msg)
-	return m, tea.Batch(viewportCmd, listCmd)
+	return m, listCmd
 }
 
 func (m *Model) View() string {
@@ -74,17 +70,13 @@ func (m *Model) View() string {
 		return ""
 	}
 
-	m.viewport.SetContent(m.sectionList.View())
-	output := m.viewport.View()
-	return output
+	return m.sectionList.View()
 }
 
 func (m *Model) SetSize(width int, height int) {
 	x, y := style.PanelBorder.GetFrameSize()
-	m.viewport.SetWidth(width - x)
-	m.viewport.SetHeight(height - y)
 
-	m.sectionList.SetSize(m.viewport.Width(), m.viewport.Height())
+	m.sectionList.SetSize(width-x, height-y)
 	m.sectionList.AdditionalFullHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			m.keys.Rebuild,
