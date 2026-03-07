@@ -52,7 +52,7 @@ func newSectionDelegate(theme *style.Theme) *sectionDelegate {
 	baseStyle := lipgloss.NewStyle().PaddingLeft(1).Background(theme.BackgroundColor)
 	return &sectionDelegate{
 		itemStyle:         baseStyle,
-		selectedItemStyle: baseStyle.Background(theme.BackgroundAccentColor),
+		selectedItemStyle: baseStyle.Background(theme.HighlightColor),
 		pendingStyle:      baseStyle,
 		inProgressStyle:   baseStyle,
 		completedStyle:    baseStyle,
@@ -103,6 +103,8 @@ func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 	if index == m.Index() {
 		text += "\ntest"
 	}
+
+	style = style.Width(m.Width())
 
 	_, _ = fmt.Fprint(w, style.Render(text))
 }
