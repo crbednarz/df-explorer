@@ -18,21 +18,21 @@ func New(explorer *explorer.Explorer) *Model {
 	}
 }
 
-func (c *Model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	return nil
 }
 
-func (c *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg.(type) {
 	case message.RebuildRequest:
-		return c, func() tea.Msg {
-			c.explorer.Rebuild(context.TODO())
+		return func() tea.Msg {
+			m.explorer.Rebuild(context.TODO())
 			return nil
 		}
 	}
-	return c, nil
+	return nil
 }
 
-func (c *Model) View() string {
+func (m *Model) View() string {
 	return ""
 }

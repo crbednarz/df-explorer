@@ -49,12 +49,12 @@ func (m *Model) Init() tea.Cmd {
 	}
 }
 
-func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
+func (m *Model) Update(message tea.Msg) tea.Cmd {
 	switch msg := message.(type) {
 	case tea.KeyPressMsg:
 		m.vterm.WriteKey(teaKeyToVtermKey(msg.Key()))
 	}
-	return m, nil
+	return nil
 }
 
 func (m *Model) View() string {

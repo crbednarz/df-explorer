@@ -56,10 +56,6 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var mainCmd tea.Cmd
-	var terminalCmd tea.Cmd
-	var controllerCmd tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -72,20 +68,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			window, windowCmd := m.updateSelf(msg)
 			if m.vtermFocused {
-				m.term, terminalCmd = m.term.Update(msg)
+				terminalCmd := m.term.Update(msg)
 				return window, tea.Batch(windowCmd, terminalCmd)
 			} else {
-				m.source, mainCmd = m.source.Update(msg)
-				return window, tea.Batch(windowCmd, mainCmd)
+				sourceViewCmd := m.source.Update(msg)
+				return window, tea.Batch(windowCmd, sourceViewCmd)
 			}
 		}
 	}
 	window, windowCmd := m.updateSelf(msg)
-	m.source, mainCmd = m.source.Update(msg)
-	m.term, terminalCmd = m.term.Update(msg)
-	m.controller, controllerCmd = m.controller.Update(msg)
+	sourceViewCmd := m.source.Update(msg)
+	terminalCmd := m.term.Update(msg)
+	controllerCmd := m.controller.Update(msg)
 
-	return window, tea.Batch(windowCmd, mainCmd, terminalCmd, controllerCmd)
+	return window, tea.Batch(windowCmd, sourceViewCmd, terminalCmd, controllerCmd)
 }
 
 func (m *Model) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {

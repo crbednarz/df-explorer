@@ -47,7 +47,7 @@ func (m *Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case explorer.DockerfileEvent:
 		m.setDockerfile(msg.Dockerfile)
@@ -60,7 +60,7 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Rebuild):
-			return m, func() tea.Msg {
+			return func() tea.Msg {
 				return message.RebuildRequest{}
 			}
 		}
@@ -68,7 +68,7 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	var listCmd tea.Cmd
 	m.sectionList, listCmd = m.sectionList.Update(msg)
 	statusCmd := m.status.Update(msg)
-	return m, tea.Batch(listCmd, statusCmd)
+	return tea.Batch(listCmd, statusCmd)
 }
 
 func (m *Model) View() string {
