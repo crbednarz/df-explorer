@@ -20,7 +20,7 @@ var (
 )
 
 type Model struct {
-	file         *sourceview.Model
+	source       *sourceview.Model
 	term         *terminal.Model
 	controller   *controller.Model
 	vtermFocused bool
@@ -29,7 +29,7 @@ type Model struct {
 func New(explorer *explorer.Explorer) *Model {
 	theme := style.DefaultTheme()
 	return &Model{
-		file:         sourceview.New(theme),
+		source:       sourceview.New(theme),
 		term:         terminal.New(explorer),
 		controller:   controller.New(explorer),
 		vtermFocused: true,
@@ -48,7 +48,7 @@ func animate() tea.Cmd {
 
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
-		m.file.Init(),
+		m.source.Init(),
 		m.term.Init(),
 		m.controller.Init(),
 		animate(),
@@ -75,13 +75,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.term, terminalCmd = m.term.Update(msg)
 				return window, tea.Batch(windowCmd, terminalCmd)
 			} else {
-				m.file, mainCmd = m.file.Update(msg)
+				m.source, mainCmd = m.source.Update(msg)
 				return window, tea.Batch(windowCmd, mainCmd)
 			}
 		}
 	}
 	window, windowCmd := m.updateSelf(msg)
-	m.file, mainCmd = m.file.Update(msg)
+	m.source, mainCmd = m.source.Update(msg)
 	m.term, terminalCmd = m.term.Update(msg)
 	m.controller, controllerCmd = m.controller.Update(msg)
 
@@ -97,7 +97,7 @@ func (m *Model) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.WindowSizeMsg:
 		m.term.SetSize(msg.Width-1, 10)
-		m.file.SetSize(msg.Width-1, msg.Height-10)
+		m.source.SetSize(msg.Width-1, msg.Height-10)
 	case frameMsg:
 		return m, animate()
 	case message.FatalError:
@@ -109,16 +109,16 @@ func (m *Model) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) View() tea.View {
 	vtermView := m.term.View()
-	fileView := m.file.View()
+	sourceView := m.source.View()
 
 	if m.vtermFocused {
 		vtermView = panelActiveStyle.Render(vtermView)
-		fileView = panelInactiveStyle.Render(fileView)
+		sourceView = panelInactiveStyle.Render(sourceView)
 	} else {
 		vtermView = panelInactiveStyle.Render(vtermView)
-		fileView = panelActiveStyle.Render(fileView)
+		sourceView = panelActiveStyle.Render(sourceView)
 	}
-	view := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, fileView, vtermView))
+	view := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, sourceView, vtermView))
 	view.AltScreen = true
 	return view
 }

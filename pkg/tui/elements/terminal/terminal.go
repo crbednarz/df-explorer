@@ -67,7 +67,7 @@ func (m *Model) View() string {
 
 func (m *Model) SetSize(width int, height int) {
 	m.vterm.SetSize(width, height)
-	m.explorer.ContainerProxy().Write([]byte(fmt.Sprintf("\x1b[8;%d;%dt", height, width)))
+	fmt.Fprintf(m.explorer.ContainerProxy(), "\x1b[8;%d;%dt", height, width)
 }
 
 func (m *Model) Close() error {
