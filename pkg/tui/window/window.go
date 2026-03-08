@@ -92,8 +92,7 @@ func (m *Model) updateSelf(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case tea.WindowSizeMsg:
-		m.term.SetSize(msg.Width-1, 10)
-		m.source.SetSize(msg.Width-1, msg.Height-10)
+		m.setSize(msg.Width, msg.Height)
 	case frameMsg:
 		return m, animate()
 	case message.FatalError:
@@ -117,4 +116,15 @@ func (m *Model) View() tea.View {
 	view := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, sourceView, vtermView))
 	view.AltScreen = true
 	return view
+}
+
+func (m *Model) setSize(width int, height int) {
+	focusBarWidth := 1
+	panelWidth := width - focusBarWidth
+
+	termHeight := 10
+	sourceHeight := height - termHeight
+
+	m.term.SetSize(panelWidth, termHeight)
+	m.source.SetSize(panelWidth, sourceHeight)
 }
