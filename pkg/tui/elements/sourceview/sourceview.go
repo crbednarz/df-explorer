@@ -8,6 +8,7 @@ import (
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui/elements/statusbar"
+	"github.com/crbednarz/df-explorer/pkg/tui/elements/titlebar"
 	"github.com/crbednarz/df-explorer/pkg/tui/message"
 	"github.com/crbednarz/df-explorer/pkg/tui/style"
 )
@@ -15,6 +16,7 @@ import (
 type Model struct {
 	dockerfile  *docker.Dockerfile
 	sectionList list.Model
+	title       *titlebar.Model
 	status      *statusbar.Model
 	sectionMap  map[string]*sectionItem
 	keys        sourceViewKeyMap
@@ -35,11 +37,17 @@ func New(theme *style.Theme) *Model {
 			),
 		},
 		status: statusbar.New(theme),
+		title:  titlebar.New(theme),
 	}
 	m.sectionList.SetShowStatusBar(false)
 	m.sectionList.SetFilteringEnabled(false)
 	m.sectionList.SetShowHelp(false)
 	m.sectionList.SetShowTitle(false)
+	m.sectionList.AdditionalFullHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			m.keys.Rebuild,
+		}
+	}
 	return m
 }
 
@@ -68,7 +76,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	var listCmd tea.Cmd
 	m.sectionList, listCmd = m.sectionList.Update(msg)
 	statusCmd := m.status.Update(msg)
-	return tea.Batch(listCmd, statusCmd)
+	titleCmd := m.title.Update(msg)
+	return tea.Batch(listCmd, statusCmd, titleCmd)
 }
 
 func (m *Model) View() string {
@@ -78,18 +87,15 @@ func (m *Model) View() string {
 
 	listView := m.sectionList.View()
 	statusView := m.status.View()
+	titleView := m.title.View()
 
-	view := lipgloss.JoinVertical(lipgloss.Left, statusView, listView)
+	view := lipgloss.JoinVertical(lipgloss.Left, titleView, listView, statusView)
 	return view
 }
 
 func (m *Model) SetSize(width int, height int) {
-	m.sectionList.SetSize(width, height-1)
-	m.sectionList.AdditionalFullHelpKeys = func() []key.Binding {
-		return []key.Binding{
-			m.keys.Rebuild,
-		}
-	}
+	m.sectionList.SetSize(width, height-2)
+	m.title.SetWidth(width)
 }
 
 func (m *Model) setDockerfile(dockerfile *docker.Dockerfile) {

@@ -83,6 +83,10 @@ func (df *Dockerfile) Path() string {
 	return df.dockerfile
 }
 
+func (df *Dockerfile) Dir() string {
+	return filepath.Dir(df.dockerfile)
+}
+
 func (df *Dockerfile) Build(ctx context.Context, builder *Builder, progress chan *buildkit.SolveStatus) (string, error) {
 	imageID, err := builder.Build(
 		ctx,
@@ -100,7 +104,7 @@ func (df *Dockerfile) Build(ctx context.Context, builder *Builder, progress chan
 
 func (df *Dockerfile) Append(line string) error {
 	lineToAppend := append([]byte(line), byte('\n'), byte('\n'))
-	f, err := os.OpenFile(df.dockerfile, os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(df.dockerfile, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("unable to open dockerfile: %w", err)
 	}
