@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
@@ -150,7 +151,7 @@ func (c *DockerContainer) run(ctx context.Context, options *containerOptions) er
 
 	if options.name != "" {
 		// We can ignore the error here, as we'll just create a new container if needed
-		existing, _ := c.findContainerIdByName(ctx, string(options.name))
+		existing, _ := c.findContainerIDByName(ctx, string(options.name))
 		if existing != "" {
 			if options.shouldReuse {
 				c.containerId = existing
@@ -195,7 +196,7 @@ func (c *DockerContainer) Attachment() io.ReadWriter {
 	return c.attachment
 }
 
-func (c *DockerContainer) findContainerIdByName(ctx context.Context, name string) (string, error) {
+func (c *DockerContainer) findContainerIDByName(ctx context.Context, name string) (string, error) {
 	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return "", fmt.Errorf("failed to list containers: %w", err)
@@ -203,10 +204,8 @@ func (c *DockerContainer) findContainerIdByName(ctx context.Context, name string
 
 	searchName := "/" + name
 	for _, existingContainer := range containers {
-		for _, containerName := range existingContainer.Names {
-			if containerName == searchName {
-				return existingContainer.ID, nil
-			}
+		if slices.Contains(existingContainer.Names, searchName) {
+			return existingContainer.ID, nil
 		}
 	}
 	return "", nil
