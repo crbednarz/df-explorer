@@ -67,15 +67,15 @@ func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
 		return err
 	}
 
-	e.Rebuild(ctx)
-
-	// TODO: this should really check if ImageID is ""
-	container, err := e.server.SpawnContainer(ctx, e.cli, e.dockerfile.ImageID())
-	if err != nil {
-		return fmt.Errorf("unable to spawn container: %w", err)
+	err = e.Rebuild(ctx)
+	if err == nil {
+		// TODO: this should really check if ImageID is ""
+		container, err := e.server.SpawnContainer(ctx, e.cli, e.dockerfile.ImageID())
+		if err != nil {
+			return fmt.Errorf("unable to spawn container: %w", err)
+		}
+		e.container.SetContainer(container)
 	}
-	defer e.container.Close()
-	e.container.SetContainer(container)
 
 	return e.server.Listen(ctx, func(event ServerEvent) error {
 		e.history.Add(event)
@@ -116,9 +116,13 @@ func (e *Explorer) Rebuild(ctx context.Context) error {
 				Status: status,
 			})
 			if err != nil {
+				e.eventCallback(BuildEndEvent{
+					Error: err,
+				})
 				return err
 			}
 		}
+		e.eventCallback(BuildEndEvent{})
 		return nil
 	})
 	eg.Go(func() error {
@@ -133,6 +137,7 @@ func (e *Explorer) Close() error {
 	if err := e.builder.Close(); err != nil {
 		return err
 	}
+	e.container.Close()
 	return e.server.Close()
 }
 
