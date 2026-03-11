@@ -51,7 +51,7 @@ func (a *App) Run(ctx context.Context) error {
 	)
 
 	eg, ctx := errgroup.WithContext(ctx)
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancelCause(ctx)
 
 	eg.Go(func() error {
 		err := a.explorer.Run(ctx, func(event explorer.Event) error {
@@ -59,6 +59,7 @@ func (a *App) Run(ctx context.Context) error {
 			return nil
 		})
 		if err != nil {
+			p.Kill()
 			return fmt.Errorf("runtime explorer error: %w", err)
 		}
 		return nil
@@ -66,7 +67,7 @@ func (a *App) Run(ctx context.Context) error {
 
 	_, err = p.Run()
 	stdinReader.Cancel()
-	cancel()
+	cancel(fmt.Errorf("cancel due to expected exit"))
 	if err != nil {
 		return fmt.Errorf("runtime tea error: %w", err)
 	}

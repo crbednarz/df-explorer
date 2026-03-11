@@ -17,8 +17,9 @@ const (
 )
 
 type Model struct {
-	name   string
-	status BuildStatus
+	name        string
+	status      BuildStatus
+	containerID string
 }
 
 func New(theme *style.Theme) *Model {
@@ -39,6 +40,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.handleProgress(msg)
 	case explorer.BuildEndEvent:
 		m.status = StatusCompleted
+	case explorer.ContainerChangeEvent:
+		m.containerID = msg.ContainerID
+
 	}
 
 	return nil
@@ -54,7 +58,7 @@ func (m *Model) View() string {
 	case StatusPending:
 		status = "Pending"
 	}
-	return fmt.Sprintf("%s %s", m.name, status)
+	return fmt.Sprintf("File: %s - Status: %s - Container: %s", m.name, status, m.containerID)
 }
 
 func (m *Model) handleProgress(event explorer.BuildProgressEvent) {

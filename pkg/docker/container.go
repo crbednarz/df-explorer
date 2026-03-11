@@ -16,12 +16,13 @@ type Container interface {
 	Attachment() io.ReadWriter
 	SetSize(width uint, height uint) error
 	Close() error
+	ID() string
 }
 
 type DockerContainer struct {
 	cli           *client.Client
 	imageName     string
-	containerId   string
+	containerID   string
 	attachment    io.ReadWriteCloser
 	removeOnClean bool
 }
@@ -125,7 +126,7 @@ func NewContainer(ctx context.Context, cli *client.Client, image string, optionF
 	container := &DockerContainer{
 		cli:           cli,
 		imageName:     image,
-		containerId:   "",
+		containerID:   "",
 		removeOnClean: options.shouldRemove,
 	}
 	err := container.run(ctx, options)
@@ -145,8 +146,8 @@ func NewContainer(ctx context.Context, cli *client.Client, image string, optionF
 }
 
 func (c *DockerContainer) run(ctx context.Context, options *containerOptions) error {
-	if c.containerId != "" {
-		return fmt.Errorf("container is already running with ID: %s", c.containerId)
+	if c.containerID != "" {
+		return fmt.Errorf("container is already running with ID: %s", c.containerID)
 	}
 
 	if options.name != "" {
@@ -154,7 +155,7 @@ func (c *DockerContainer) run(ctx context.Context, options *containerOptions) er
 		existing, _ := c.findContainerIDByName(ctx, string(options.name))
 		if existing != "" {
 			if options.shouldReuse {
-				c.containerId = existing
+				c.containerID = existing
 			} else {
 				err := c.cli.ContainerRemove(ctx, existing, container.RemoveOptions{Force: true})
 				if err != nil {
@@ -164,7 +165,7 @@ func (c *DockerContainer) run(ctx context.Context, options *containerOptions) er
 		}
 	}
 
-	if c.containerId == "" {
+	if c.containerID == "" {
 		resp, err := c.cli.ContainerCreate(
 			ctx,
 			&container.Config{
@@ -182,10 +183,10 @@ func (c *DockerContainer) run(ctx context.Context, options *containerOptions) er
 		if err != nil {
 			return err
 		}
-		c.containerId = resp.ID
+		c.containerID = resp.ID
 	}
 
-	err := c.cli.ContainerStart(ctx, c.containerId, container.StartOptions{})
+	err := c.cli.ContainerStart(ctx, c.containerID, container.StartOptions{})
 	if err != nil {
 		return err
 	}
@@ -212,11 +213,11 @@ func (c *DockerContainer) findContainerIDByName(ctx context.Context, name string
 }
 
 func (c *DockerContainer) attach(ctx context.Context) (io.ReadWriteCloser, error) {
-	if c.containerId == "" {
+	if c.containerID == "" {
 		return nil, fmt.Errorf("container is not running")
 	}
 
-	attachment, err := c.cli.ContainerAttach(ctx, c.containerId, container.AttachOptions{
+	attachment, err := c.cli.ContainerAttach(ctx, c.containerID, container.AttachOptions{
 		Stderr: true,
 		Stdout: true,
 		Stdin:  true,
@@ -230,14 +231,18 @@ func (c *DockerContainer) attach(ctx context.Context) (io.ReadWriteCloser, error
 }
 
 func (c *DockerContainer) SetSize(width uint, height uint) error {
-	return c.cli.ContainerResize(context.TODO(), c.containerId, container.ResizeOptions{
+	return c.cli.ContainerResize(context.TODO(), c.containerID, container.ResizeOptions{
 		Height: height,
 		Width:  width,
 	})
 }
 
+func (c *DockerContainer) ID() string {
+	return c.containerID
+}
+
 func (c *DockerContainer) Close() error {
-	if c.containerId == "" {
+	if c.containerID == "" {
 		return nil
 	}
 	if c.attachment != nil {
@@ -246,11 +251,11 @@ func (c *DockerContainer) Close() error {
 
 	// TODO: Investigate why graceful shutdown doesn't work
 	timeout := 0
-	err := c.cli.ContainerStop(context.TODO(), c.containerId, container.StopOptions{Timeout: &timeout})
+	err := c.cli.ContainerStop(context.TODO(), c.containerID, container.StopOptions{Timeout: &timeout})
 	if !c.removeOnClean {
 		return err
 	}
-	return c.cli.ContainerRemove(context.TODO(), c.containerId, container.RemoveOptions{Force: true})
+	return c.cli.ContainerRemove(context.TODO(), c.containerID, container.RemoveOptions{Force: true})
 }
 
 func pullImage(ctx context.Context, cli *client.Client, imageName string) error {

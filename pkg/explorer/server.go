@@ -56,7 +56,7 @@ func newServer() (*Server, error) {
 	historyFile.Close()
 
 	envScriptName := "df-env.sh"
-	err = os.WriteFile(path.Join(sessionDir, envScriptName), []byte(envScript), 0644)
+	err = os.WriteFile(path.Join(sessionDir, envScriptName), []byte(envScript), 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("unable to write profile script: %w", err)
 	}
@@ -80,6 +80,9 @@ func (s *Server) SpawnContainer(ctx context.Context, cli *client.Client, image s
 		docker.WithCommand([]string{"/bin/bash"}),
 		docker.WithAttach(true),
 	)
+	if err != nil {
+		return nil, err
+	}
 	fmt.Fprintf(container.Attachment(), "source %s\nreset\n", path.Join(s.remoteSessionDir, "df-env.sh"))
 	return container, err
 }

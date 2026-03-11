@@ -18,8 +18,16 @@ type DockerfileEvent struct {
 	Dockerfile *docker.Dockerfile
 }
 
+type ContainerChangeEvent struct {
+	ContainerID string
+}
+
 type BuildProgressEvent struct {
 	Status *buildkit.SolveStatus
 }
 
 type BuildStartEvent struct{}
+
+type BuildEndEvent struct {
+	Error error
+}

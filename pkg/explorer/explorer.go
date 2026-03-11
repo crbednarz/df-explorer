@@ -3,6 +3,7 @@ package explorer
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/docker/docker/client"
@@ -10,6 +11,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// FIXME: Event callback should not return an error
 type EventCallback func(event Event) error
 
 type Status int
@@ -67,14 +69,9 @@ func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
 		return err
 	}
 
-	err = e.Rebuild(ctx)
-	if err == nil {
-		// TODO: this should really check if ImageID is ""
-		container, err := e.server.SpawnContainer(ctx, e.cli, e.dockerfile.ImageID())
-		if err != nil {
-			return fmt.Errorf("unable to spawn container: %w", err)
-		}
-		e.container.SetContainer(container)
+	if err := e.Rebuild(ctx); err != nil {
+		// FIXME: This shouldn't return an error. Containers are allowed to fail
+		return fmt.Errorf("initial container build failed: %w", err)
 	}
 
 	return e.server.Listen(ctx, func(event ServerEvent) error {
@@ -98,29 +95,21 @@ func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
 }
 
 func (e *Explorer) Rebuild(ctx context.Context) error {
+	baseCtx := ctx
 	if e.status == StatusBuilding {
 		return fmt.Errorf("build already in progress")
 	}
 	e.status = StatusBuilding
 	defer func() { e.status = StatusIdle }()
 
-	err := e.eventCallback(BuildStartEvent{})
-	if err != nil {
-		return err
-	}
+	e.eventCallback(BuildStartEvent{})
 	progress := make(chan *buildkit.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		for status := range progress {
-			err := e.eventCallback(BuildProgressEvent{
+			e.eventCallback(BuildProgressEvent{
 				Status: status,
 			})
-			if err != nil {
-				e.eventCallback(BuildEndEvent{
-					Error: err,
-				})
-				return err
-			}
 		}
 		e.eventCallback(BuildEndEvent{})
 		return nil
@@ -130,14 +119,34 @@ func (e *Explorer) Rebuild(ctx context.Context) error {
 		return err
 	})
 
-	return eg.Wait()
+	err := eg.Wait()
+	if err == nil {
+		return e.setContainerFromImageID(baseCtx, e.dockerfile.ImageID())
+	} else {
+		log.Fatalf("err: %v", err)
+	}
+	return err
+}
+
+func (e *Explorer) setContainerFromImageID(ctx context.Context, imageID string) error {
+	container, err := e.server.SpawnContainer(ctx, e.cli, imageID)
+	if err != nil {
+		return fmt.Errorf("unable to spawn container: %w", err)
+	}
+	e.container.SetContainer(container)
+	e.eventCallback(ContainerChangeEvent{
+		ContainerID: container.ID(),
+	})
+	return nil
 }
 
 func (e *Explorer) Close() error {
 	if err := e.builder.Close(); err != nil {
 		return err
 	}
-	e.container.Close()
+	if err := e.container.Close(); err != nil {
+		return err
+	}
 	return e.server.Close()
 }
 
