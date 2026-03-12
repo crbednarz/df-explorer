@@ -37,6 +37,12 @@ func (c *ContainerProxy) Read(p []byte) (n int, err error) {
 
 // SetContainer sets the underlying container.
 func (c *ContainerProxy) SetContainer(container docker.Container) {
+	c.mu.RLock()
+	if c.container != nil && c.container != container {
+		c.container.Close()
+	}
+	c.mu.RUnlock()
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.container = container

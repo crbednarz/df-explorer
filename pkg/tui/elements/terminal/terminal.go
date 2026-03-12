@@ -1,8 +1,10 @@
 package terminal
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"net"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
@@ -41,11 +43,15 @@ func (m *Model) Init() tea.Cmd {
 		m.explorer.ContainerProxy().Write(data)
 	})
 	return func() tea.Msg {
-		_, err := io.Copy(m.vterm, attachmentReader)
-		if err != nil {
-			return message.FatalError{Err: fmt.Errorf("error reading from container attachment: %w", err)}
+		for {
+			_, err := io.Copy(m.vterm, attachmentReader)
+			if errors.Is(err, net.ErrClosed) {
+				continue
+			}
+			if err != nil {
+				return message.FatalError{Err: fmt.Errorf("error reading from container attachment: %w", err)}
+			}
 		}
-		return nil
 	}
 }
 

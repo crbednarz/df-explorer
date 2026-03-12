@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/crbednarz/df-explorer/pkg/docker"
 	"github.com/docker/docker/client"
@@ -30,6 +31,7 @@ type Explorer struct {
 	container     ContainerProxy
 	eventCallback EventCallback
 	status        Status
+	mu            sync.Mutex
 }
 
 func New(ctx context.Context, cli *client.Client) (*Explorer, error) {
@@ -95,7 +97,8 @@ func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
 }
 
 func (e *Explorer) Rebuild(ctx context.Context) error {
-	baseCtx := ctx
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.status == StatusBuilding {
 		return fmt.Errorf("build already in progress")
 	}
@@ -104,7 +107,7 @@ func (e *Explorer) Rebuild(ctx context.Context) error {
 
 	e.eventCallback(BuildStartEvent{})
 	progress := make(chan *buildkit.SolveStatus)
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, errGroupCtx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		for status := range progress {
 			e.eventCallback(BuildProgressEvent{
@@ -115,13 +118,13 @@ func (e *Explorer) Rebuild(ctx context.Context) error {
 		return nil
 	})
 	eg.Go(func() error {
-		_, err := e.dockerfile.Build(ctx, e.builder, progress)
+		_, err := e.dockerfile.Build(errGroupCtx, e.builder, progress)
 		return err
 	})
 
 	err := eg.Wait()
 	if err == nil {
-		return e.setContainerFromImageID(baseCtx, e.dockerfile.ImageID())
+		return e.setContainerFromImageID(ctx, e.dockerfile.ImageID())
 	} else {
 		log.Fatalf("err: %v", err)
 	}

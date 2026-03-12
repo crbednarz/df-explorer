@@ -246,7 +246,10 @@ func (c *DockerContainer) Close() error {
 		return nil
 	}
 	if c.attachment != nil {
-		c.attachment.Close()
+		err := c.attachment.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	// TODO: Investigate why graceful shutdown doesn't work
