@@ -41,7 +41,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case explorer.BuildEndEvent:
 		m.status = StatusCompleted
 	case explorer.ContainerChangeEvent:
-		m.containerID = msg.ContainerID
+		m.containerID = msg.ContainerID()
 
 	}
 

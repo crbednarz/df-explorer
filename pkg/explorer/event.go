@@ -19,7 +19,7 @@ type DockerfileEvent struct {
 }
 
 type ContainerChangeEvent struct {
-	ContainerID string
+	Container docker.Container
 }
 
 type BuildProgressEvent struct {
@@ -30,4 +30,12 @@ type BuildStartEvent struct{}
 
 type BuildEndEvent struct {
 	Error error
+}
+
+// ContainerID returns ID of new container, if present, otherwise returning an empty string
+func (c *ContainerChangeEvent) ContainerID() string {
+	if c.Container != nil {
+		return c.Container.ID()
+	}
+	return ""
 }

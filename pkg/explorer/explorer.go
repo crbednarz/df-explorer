@@ -138,7 +138,7 @@ func (e *Explorer) setContainerFromImageID(ctx context.Context, imageID string) 
 	}
 	e.container.SetContainer(container)
 	e.eventCallback(ContainerChangeEvent{
-		ContainerID: container.ID(),
+		Container: container,
 	})
 	return nil
 }

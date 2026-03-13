@@ -17,6 +17,7 @@ type Container interface {
 	SetSize(width uint, height uint) error
 	Close() error
 	ID() string
+	ImageID() string
 }
 
 type DockerContainer struct {
@@ -185,7 +186,6 @@ func (c *DockerContainer) run(ctx context.Context, options *containerOptions) er
 		}
 		c.containerID = resp.ID
 	}
-
 	err := c.cli.ContainerStart(ctx, c.containerID, container.StartOptions{})
 	if err != nil {
 		return err
@@ -239,6 +239,10 @@ func (c *DockerContainer) SetSize(width uint, height uint) error {
 
 func (c *DockerContainer) ID() string {
 	return c.containerID
+}
+
+func (c *DockerContainer) ImageID() string {
+	return c.imageName
 }
 
 func (c *DockerContainer) Close() error {
