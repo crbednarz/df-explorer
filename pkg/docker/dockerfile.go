@@ -17,29 +17,6 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
-type InstructionType string
-
-const (
-	InstructionAdd         InstructionType = "ADD"
-	InstructionArg         InstructionType = "ARG"
-	InstructionCmd         InstructionType = "CMD"
-	InstructionCopy        InstructionType = "COPY"
-	InstructionEntrypoint  InstructionType = "ENTRYPOINT"
-	InstructionEnv         InstructionType = "ENV"
-	InstructionExpose      InstructionType = "EXPOSE"
-	InstructionFrom        InstructionType = "FROM"
-	InstructionHealthcheck InstructionType = "HEALTHCHECK"
-	InstructionLabel       InstructionType = "LABEL"
-	InstructionMaintainer  InstructionType = "MAINTAINER"
-	InstructionOnbuild     InstructionType = "ONBUILD"
-	InstructionRun         InstructionType = "RUN"
-	InstructionShell       InstructionType = "SHELL"
-	InstructionStopsignal  InstructionType = "STOPSIGNAL"
-	InstructionUser        InstructionType = "USER"
-	InstructionVolume      InstructionType = "VOLUME"
-	InstructionWorkdir     InstructionType = "WORKDIR"
-)
-
 type Dockerfile struct {
 	buildContext string
 	dockerfile   string
