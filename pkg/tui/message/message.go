@@ -5,3 +5,7 @@ type FatalError struct {
 }
 
 type RebuildRequest struct{}
+
+type ContainerRequest struct {
+	VertexID string
+}

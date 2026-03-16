@@ -73,7 +73,7 @@ func (d sectionDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd {
 }
 
 func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	block, ok := listItem.(*sectionItem)
+	section, ok := listItem.(*sectionItem)
 	if !ok {
 		return
 	}
@@ -83,10 +83,10 @@ func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 
 	if index == m.Index() {
 		style = d.selectedItemStyle
-	} else if block.Metadata == nil {
+	} else if section.Metadata == nil {
 		style = d.noStageStyle
 	} else {
-		switch block.Status {
+		switch section.Status {
 		case StatusPending:
 			style = d.pendingStyle
 		case StatusInProgress:
@@ -98,10 +98,10 @@ func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 			style = d.completedStyle
 		}
 	}
-	text := fmt.Sprintf("%s %s", prefix, block.Text)
+	text := fmt.Sprintf("%s %s", prefix, section.Text)
 
-	if index == m.Index() {
-		text += "\ntest"
+	if index == m.Index() && section.Metadata != nil {
+		text = fmt.Sprintf("%s\nVertex: %s", text, section.Vertex)
 	}
 
 	style = style.Width(m.Width())

@@ -143,7 +143,7 @@ func newSolveOpt(w io.WriteCloser, config BuildConfig) (*buildkit.SolveOpt, erro
 	return &buildkit.SolveOpt{
 		Exports: []buildkit.ExportEntry{
 			{
-				Type: "docker", // TODO: use containerd image store when it is integrated to Docker
+				Type: "docker",
 				Output: func(_ map[string]string) (io.WriteCloser, error) {
 					return w, nil
 				},

@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/crbednarz/df-explorer/pkg/explorer"
 	"github.com/crbednarz/df-explorer/pkg/tui/style"
+	"github.com/crbednarz/df-explorer/pkg/util"
 )
 
 type BuildStatus int

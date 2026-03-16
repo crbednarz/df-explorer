@@ -7,4 +7,11 @@ FROM ubuntu:22.04
 
 COPY --from=A /tmp/hi /tmp/hi
 
+RUN apt update
+
+RUN apt install -y wget
+
+RUN echo hi > /tmp/hi2
+
 CMD ["/bin/bash"]
+

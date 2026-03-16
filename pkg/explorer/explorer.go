@@ -97,6 +97,14 @@ func (e *Explorer) Run(ctx context.Context, callback EventCallback) error {
 }
 
 func (e *Explorer) Rebuild(ctx context.Context) error {
+	return e.rebuild(ctx, "")
+}
+
+func (e *Explorer) RebuildToVertex(ctx context.Context, vertexID string) error {
+	return e.rebuild(ctx, vertexID)
+}
+
+func (e *Explorer) rebuild(ctx context.Context, vertexID string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.status == StatusBuilding {
@@ -118,7 +126,12 @@ func (e *Explorer) Rebuild(ctx context.Context) error {
 		return nil
 	})
 	eg.Go(func() error {
-		_, err := e.dockerfile.Build(errGroupCtx, e.builder, progress)
+		var err error
+		if vertexID != "" {
+			_, err = e.dockerfile.BuildToVertex(errGroupCtx, e.builder, vertexID, progress)
+		} else {
+			_, err = e.dockerfile.Build(errGroupCtx, e.builder, progress)
+		}
 		return err
 	})
 

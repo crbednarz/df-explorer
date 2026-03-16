@@ -23,10 +23,15 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case message.RebuildRequest:
 		return func() tea.Msg {
 			m.explorer.Rebuild(context.TODO())
+			return nil
+		}
+	case message.ContainerRequest:
+		return func() tea.Msg {
+			m.explorer.RebuildToVertex(context.TODO(), msg.VertexID)
 			return nil
 		}
 	}

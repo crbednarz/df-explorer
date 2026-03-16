@@ -44,8 +44,10 @@ type Dockerfile struct {
 	buildContext string
 	dockerfile   string
 	definition   *llb.Definition
+	state        *llb.State
 	source       *Source
 	imageID      string
+	vertexMap    map[string]llb.Vertex
 }
 
 type Source struct {
@@ -88,10 +90,22 @@ func (df *Dockerfile) Dir() string {
 }
 
 func (df *Dockerfile) Build(ctx context.Context, builder *Builder, progress chan *buildkit.SolveStatus) (string, error) {
+	return df.build(ctx, builder, df.definition, progress)
+}
+
+func (df *Dockerfile) BuildToVertex(ctx context.Context, builder *Builder, vertex string, progress chan *buildkit.SolveStatus) (string, error) {
+	subDef, err := df.getSubDefinition(vertex)
+	if err != nil {
+		return "", err
+	}
+	return df.build(ctx, builder, subDef, progress)
+}
+
+func (df *Dockerfile) build(ctx context.Context, builder *Builder, definition *llb.Definition, progress chan *buildkit.SolveStatus) (string, error) {
 	imageID, err := builder.Build(
 		ctx,
 		WithDockerfile(df.dockerfile, df.buildContext),
-		WithDefinition(df.definition),
+		WithDefinition(definition),
 		WithProgressChannel(progress),
 	)
 	if err != nil {
@@ -100,6 +114,33 @@ func (df *Dockerfile) Build(ctx context.Context, builder *Builder, progress chan
 
 	df.imageID = imageID
 	return imageID, nil
+}
+
+func (df *Dockerfile) getSubDefinition(vertex string) (*llb.Definition, error) {
+	v, ok := df.vertexMap[vertex]
+	if !ok {
+		return nil, fmt.Errorf("failed to find vertex: %v", vertex)
+	}
+	state := llb.NewState(v.Output())
+	return state.Marshal(context.TODO())
+}
+
+func (df *Dockerfile) createVertexMap() map[string]llb.Vertex {
+	vertexMap := make(map[string]llb.Vertex, 0)
+	populateVertexMap(context.TODO(), vertexMap, df.state.Output(), df.definition.Constraints)
+	return vertexMap
+}
+
+func populateVertexMap(ctx context.Context, vertexMap map[string]llb.Vertex, output llb.Output, constraints *llb.Constraints) {
+	v := output.Vertex(ctx, constraints)
+	dgst, _, _, _, err := v.Marshal(ctx, constraints)
+	if err != nil {
+		return
+	}
+	vertexMap[dgst.String()] = v
+	for _, input := range v.Inputs() {
+		populateVertexMap(ctx, vertexMap, input, constraints)
+	}
 }
 
 func (df *Dockerfile) Append(line string) error {
@@ -137,6 +178,7 @@ func (df *Dockerfile) reload() error {
 		},
 		SourceMap: sourceMap,
 	})
+	df.state = state
 	if err != nil {
 		return err
 	}
@@ -153,6 +195,7 @@ func (df *Dockerfile) reload() error {
 	}
 
 	df.imageID = ""
+	df.vertexMap = df.createVertexMap()
 	return nil
 }
 

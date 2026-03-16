@@ -24,6 +24,7 @@ type Model struct {
 
 type sourceViewKeyMap struct {
 	Rebuild key.Binding
+	Enter   key.Binding
 }
 
 func New(theme *style.Theme) *Model {
@@ -34,6 +35,10 @@ func New(theme *style.Theme) *Model {
 			Rebuild: key.NewBinding(
 				key.WithKeys("r"),
 				key.WithHelp("r", "rebuild"),
+			),
+			Enter: key.NewBinding(
+				key.WithKeys("space"),
+				key.WithHelp("space", "enter layer"),
 			),
 		},
 		status: statusbar.New(theme),
@@ -65,11 +70,29 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case explorer.BuildProgressEvent:
 		m.handleProgress(msg)
+	case explorer.ContainerChangeEvent:
+
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Rebuild):
 			return func() tea.Msg {
 				return message.RebuildRequest{}
+			}
+		case key.Matches(msg, m.keys.Enter):
+			return func() tea.Msg {
+				selected := m.sectionList.SelectedItem()
+				if selected == nil {
+					return nil
+				}
+
+				section := selected.(*sectionItem)
+				if section.Vertex == "" {
+					return nil
+				}
+
+				return message.ContainerRequest{
+					VertexID: section.Vertex,
+				}
 			}
 		}
 	}
