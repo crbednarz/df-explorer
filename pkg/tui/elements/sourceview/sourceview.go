@@ -14,12 +14,13 @@ import (
 )
 
 type Model struct {
-	dockerfile  *docker.Dockerfile
-	sectionList list.Model
-	title       *titlebar.Model
-	status      *statusbar.Model
-	sectionMap  map[string]*sectionItem
-	keys        sourceViewKeyMap
+	dockerfile     *docker.Dockerfile
+	sectionList    list.Model
+	title          *titlebar.Model
+	status         *statusbar.Model
+	sectionMap     map[string]*sectionItem
+	keys           sourceViewKeyMap
+	runningSection *sectionItem
 }
 
 type sourceViewKeyMap struct {
@@ -71,7 +72,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case explorer.BuildProgressEvent:
 		m.handleProgress(msg)
 	case explorer.ContainerChangeEvent:
-
+		m.handleContainerChange(msg)
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Rebuild):
@@ -143,6 +144,31 @@ func (m *Model) setDockerfile(dockerfile *docker.Dockerfile) {
 	m.sectionList.SetItems(sectionItems)
 	m.sectionMap = sectionItemMap
 	m.dockerfile = dockerfile
+}
+
+func (m *Model) handleContainerChange(event explorer.ContainerChangeEvent) {
+	if m.runningSection != nil {
+		m.runningSection.IsRunning = false
+	}
+
+	var lastItem *sectionItem
+	if event.TargetVertex == "" {
+		sections := m.sectionList.Items()
+		for i := len(sections) - 1; i >= 0; i-- {
+			lastItem = sections[i].(*sectionItem)
+			if lastItem.Vertex != "" {
+				break
+			}
+		}
+	} else {
+		var ok bool
+		lastItem, ok = m.sectionMap[event.TargetVertex]
+		if !ok {
+			return
+		}
+	}
+	lastItem.IsRunning = true
+	m.runningSection = lastItem
 }
 
 func (m *Model) handleProgress(event explorer.BuildProgressEvent) {

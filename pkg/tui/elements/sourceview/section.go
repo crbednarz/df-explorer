@@ -21,10 +21,11 @@ const (
 )
 
 type sectionItem struct {
-	Text     string
-	Metadata *llb.OpMetadata
-	Vertex   string
-	Status   BuildStatus
+	Text      string
+	Metadata  *llb.OpMetadata
+	Vertex    string
+	Status    BuildStatus
+	IsRunning bool
 }
 
 func (s *sectionItem) FilterValue() string {
@@ -78,7 +79,7 @@ func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 		return
 	}
 
-	prefix := " "
+	prefix := "   "
 	style := d.itemStyle
 
 	if index == m.Index() {
@@ -91,12 +92,15 @@ func (d sectionDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 			style = d.pendingStyle
 		case StatusInProgress:
 			animationTime := (time.Now().UnixMilli() / 250) % 4
-			animations := []string{"-", "\\", "|", "/"}
+			animations := []string{"[-]", "[\\]", "[|]", "[/]"}
 			prefix = animations[animationTime]
 			style = d.inProgressStyle
 		case StatusCompleted:
 			style = d.completedStyle
 		}
+	}
+	if section.IsRunning {
+		prefix = "-->"
 	}
 	text := fmt.Sprintf("%s %s", prefix, section.Text)
 

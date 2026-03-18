@@ -71,7 +71,7 @@ func (df *Dockerfile) Build(ctx context.Context, builder *Builder, progress chan
 }
 
 func (df *Dockerfile) BuildToVertex(ctx context.Context, builder *Builder, vertex string, progress chan *buildkit.SolveStatus) (string, error) {
-	subDef, err := df.getSubDefinition(vertex)
+	subDef, err := df.getSubDefinition(ctx, vertex)
 	if err != nil {
 		return "", err
 	}
@@ -93,13 +93,13 @@ func (df *Dockerfile) build(ctx context.Context, builder *Builder, definition *l
 	return imageID, nil
 }
 
-func (df *Dockerfile) getSubDefinition(vertex string) (*llb.Definition, error) {
+func (df *Dockerfile) getSubDefinition(ctx context.Context, vertex string) (*llb.Definition, error) {
 	v, ok := df.vertexMap[vertex]
 	if !ok {
 		return nil, fmt.Errorf("failed to find vertex: %v", vertex)
 	}
 	state := llb.NewState(v.Output())
-	return state.Marshal(context.TODO())
+	return state.Marshal(ctx)
 }
 
 func (df *Dockerfile) createVertexMap() map[string]llb.Vertex {

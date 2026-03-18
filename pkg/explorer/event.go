@@ -19,7 +19,8 @@ type DockerfileEvent struct {
 }
 
 type ContainerChangeEvent struct {
-	Container docker.Container
+	Container    docker.Container
+	TargetVertex string
 }
 
 type BuildProgressEvent struct {

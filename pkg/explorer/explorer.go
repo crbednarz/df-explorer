@@ -3,7 +3,6 @@ package explorer
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/crbednarz/df-explorer/pkg/docker"
@@ -100,11 +99,11 @@ func (e *Explorer) Rebuild(ctx context.Context) error {
 	return e.rebuild(ctx, "")
 }
 
-func (e *Explorer) RebuildToVertex(ctx context.Context, vertexID string) error {
-	return e.rebuild(ctx, vertexID)
+func (e *Explorer) RebuildToVertex(ctx context.Context, targetVertex string) error {
+	return e.rebuild(ctx, targetVertex)
 }
 
-func (e *Explorer) rebuild(ctx context.Context, vertexID string) error {
+func (e *Explorer) rebuild(ctx context.Context, targetVertex string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.status == StatusBuilding {
@@ -127,8 +126,8 @@ func (e *Explorer) rebuild(ctx context.Context, vertexID string) error {
 	})
 	eg.Go(func() error {
 		var err error
-		if vertexID != "" {
-			_, err = e.dockerfile.BuildToVertex(errGroupCtx, e.builder, vertexID, progress)
+		if targetVertex != "" {
+			_, err = e.dockerfile.BuildToVertex(errGroupCtx, e.builder, targetVertex, progress)
 		} else {
 			_, err = e.dockerfile.Build(errGroupCtx, e.builder, progress)
 		}
@@ -136,24 +135,29 @@ func (e *Explorer) rebuild(ctx context.Context, vertexID string) error {
 	})
 
 	err := eg.Wait()
-	if err == nil {
-		return e.setContainerFromImageID(ctx, e.dockerfile.ImageID())
-	} else {
-		log.Fatalf("err: %v", err)
-	}
-	return err
-}
-
-func (e *Explorer) setContainerFromImageID(ctx context.Context, imageID string) error {
-	container, err := e.server.SpawnContainer(ctx, e.cli, imageID)
 	if err != nil {
-		return fmt.Errorf("unable to spawn container: %w", err)
+		return err
 	}
-	e.container.SetContainer(container)
+
+	container, err := e.setContainerFromImageID(ctx, e.dockerfile.ImageID())
+	if err != nil {
+		return err
+	}
+
 	e.eventCallback(ContainerChangeEvent{
-		Container: container,
+		Container:    container,
+		TargetVertex: targetVertex,
 	})
 	return nil
+}
+
+func (e *Explorer) setContainerFromImageID(ctx context.Context, imageID string) (docker.Container, error) {
+	container, err := e.server.SpawnContainer(ctx, e.cli, imageID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to spawn container: %w", err)
+	}
+	e.container.SetContainer(container)
+	return container, nil
 }
 
 func (e *Explorer) Close() error {
